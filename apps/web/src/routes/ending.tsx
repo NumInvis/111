@@ -6,7 +6,7 @@ import { Tag } from '@/components/ui/Tag'
 import { motion } from 'framer-motion'
 import { ArrowLeft, RotateCcw, Scroll, Clock, MapPin, Users, Loader2, Trophy } from 'lucide-react'
 import { useGameStore } from '@/stores/gameStore'
-import { checkEndings, endSession } from '@/lib/api'
+import { checkEndings, triggerEnding, endSession } from '@/lib/api'
 import type { EndingCandidate } from '@/types'
 
 export const Route = createFileRoute('/ending')({
@@ -14,9 +14,10 @@ export const Route = createFileRoute('/ending')({
 })
 
 function EndingPage() {
-  const { sessionId, player, currentYear, journal, reset } = useGameStore()
+  const { sessionId, player, currentYear, journal, setPhase, reset } = useGameStore()
   const [endings, setEndings] = useState<EndingCandidate[]>([])
   const [selectedEnding, setSelectedEnding] = useState<EndingCandidate | null>(null)
+  const [endingSummary, setEndingSummary] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [endingSession, setEndingSession] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -47,9 +48,12 @@ function EndingPage() {
     setEndingSession(true)
     setError(null)
     try {
+      const result = await triggerEnding(sessionId, selectedEnding.id)
+      setEndingSummary(result.summary)
       await endSession(sessionId)
+      setPhase('ended')
     } catch (err) {
-      setError(err instanceof Error ? err.message : '结束推演失败')
+      setError(err instanceof Error ? err.message : '触发结局失败')
       setEndingSession(false)
     }
   }
@@ -138,7 +142,7 @@ function EndingPage() {
           </div>
 
           <Panel title="一生总结" titleBg="dark" className="mb-6">
-            <p className="text-text-primary leading-relaxed whitespace-pre-wrap">{selectedEnding.description}</p>
+            <p className="text-text-primary leading-relaxed whitespace-pre-wrap">{endingSummary ?? selectedEnding.description}</p>
           </Panel>
 
           {selectedEnding.requiredEvidence.length > 0 && (

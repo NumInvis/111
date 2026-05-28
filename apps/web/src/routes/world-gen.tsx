@@ -7,7 +7,7 @@ import { ProgressBar } from '@/components/ui/ProgressBar'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Sparkles, Dice5, Loader2 } from 'lucide-react'
 import { useGameStore } from '@/stores/gameStore'
-import { createSession, generateWorld, toGenPref } from '@/lib/api'
+import { createSession, generateWorld, getGameState, toGenPref } from '@/lib/api'
 
 export const Route = createFileRoute('/world-gen')({
   component: WorldGenPage,
@@ -36,25 +36,9 @@ function WorldGenPage() {
       setStep('AI 正在生成世界...')
       const blueprint = await generateWorld(session.id, toGenPref(pref))
       setWorldBlueprint(blueprint)
-      const initialLocationId = blueprint.locations[0]?.id ?? ''
-      setPlayer({
-        name: '行者',
-        age: 16,
-        lifespan: 80,
-        realm: '炼体',
-        currentLocationId: initialLocationId,
-        attributes: {
-          calculation: 10, geometry: 5, abstraction: 5, proof: 3,
-          intuition: 5, focus: 10, body: 20, family: 10,
-        },
-        discoveredLocations: [initialLocationId],
-        discoveredNpcs: [],
-        discoveredClues: [],
-        discoveredRumors: [],
-        relationships: {},
-        historySummary: '初入灵墟，一切从零开始。',
-      })
-      setCurrentYear(16)
+      const playerState = await getGameState(session.id)
+      setPlayer(playerState)
+      setCurrentYear(playerState.age)
       setLoading(false)
       navigate({ to: '/explore' })
     } catch (err) {

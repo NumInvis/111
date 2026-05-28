@@ -92,6 +92,29 @@ export async function startDialogue(
   return res.data!
 }
 
+export async function sendDialogueMessage(
+  sessionId: string,
+  npcId: string,
+  message: string,
+): Promise<{ content: string; emotion: string; trustChange: number }> {
+  const res = await fetchApi<{ content: string; emotion: string; trustChange: number }>(`/game/sessions/${sessionId}/dialogue/message`, {
+    method: 'POST',
+    body: JSON.stringify({ npcId, message }),
+  })
+  return res.data!
+}
+
+export async function triggerEnding(
+  sessionId: string,
+  endingId: string,
+): Promise<{ endingId: string; summary: string }> {
+  const res = await fetchApi<{ endingId: string; summary: string }>(`/game/sessions/${sessionId}/trigger-ending`, {
+    method: 'POST',
+    body: JSON.stringify({ endingId }),
+  })
+  return res.data!
+}
+
 
 
 export async function checkEndings(sessionId: string): Promise<EndingCandidate[]> {

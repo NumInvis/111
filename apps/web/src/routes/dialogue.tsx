@@ -6,7 +6,7 @@ import { Tag } from '@/components/ui/Tag'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowLeft, Send, User, Bot, Scroll, Loader2 } from 'lucide-react'
 import { useGameStore } from '@/stores/gameStore'
-import { startDialogue, applyAction } from '@/lib/api'
+import { startDialogue, sendDialogueMessage } from '@/lib/api'
 import type { DialogueMessage } from '@/types'
 
 export const Route = createFileRoute('/dialogue')({
@@ -16,7 +16,7 @@ export const Route = createFileRoute('/dialogue')({
 function DialoguePage() {
   const {
     worldBlueprint, sessionId, player,
-    messages: msgStore, addMessage, addJournalEntries, setPhase,
+    messages: msgStore, addMessage, setPhase,
   } = useGameStore()
 
   const npcs = worldBlueprint?.npcs ?? []
@@ -49,13 +49,6 @@ function DialoguePage() {
     setIsLoadingDialogue(true)
     try {
       await startDialogue(sessionId, npcId)
-      if (player) {
-        const update = await applyAction(sessionId, 'talk', { npcId }, player.age)
-        if (update.journalEntries.length > 0) addJournalEntries(update.journalEntries)
-        if (update.newState) {
-          useGameStore.getState().setPlayer({ ...player, ...update.newState } as import('@/types').PlayerState)
-        }
-      }
       setSelectedNpcId(npcId)
     } catch (err) {
       setError(err instanceof Error ? err.message : '对话启动失败')
@@ -80,20 +73,33 @@ function DialoguePage() {
     setIsTyping(true)
 
     try {
-      await applyAction(sessionId, 'talk', {
-        npcId: activeNpc.id,
-        message: input.trim(),
-      }, player.age)
+      const reply = await sendDialogueMessage(sessionId, activeNpc.id, input.trim())
 
       const npcMsg: DialogueMessage = {
         id: `${Date.now() + 1}-npc`,
         npcId: activeNpc.id,
         role: 'npc',
-        content: activeNpc.dialogueStyle,
+        content: reply.content,
         turn: player.age,
-        metadata: { note: 'NPC 回复由本地生成，后端仅验证状态转换' },
+        metadata: { emotion: reply.emotion, trustChange: reply.trustChange },
       }
       addMessage(activeNpc.id, npcMsg)
+
+      if (reply.trustChange !== 0 && player.relationships[activeNpc.id]) {
+        const currentTrust = player.relationships[activeNpc.id].trust
+        const newTrust = Math.max(0, Math.min(1, currentTrust + reply.trustChange))
+        useGameStore.getState().setPlayer({
+          ...player,
+          relationships: {
+            ...player.relationships,
+            [activeNpc.id]: {
+              ...player.relationships[activeNpc.id],
+              trust: newTrust,
+              lastInteractionTurn: player.age,
+            },
+          },
+        } as import('@/types').PlayerState)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : '对话失败')
     } finally {
@@ -201,13 +207,9 @@ function DialoguePage() {
                   }`}>
                     <p className="text-text-primary leading-relaxed whitespace-pre-wrap text-sm">{msg.content}</p>
                   </div>
-                  {msg.memoryRefs && msg.memoryRefs.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {msg.memoryRefs.map((ref) => (
-                        <span key={ref.id} className="px-2 py-0.5 text-xs font-mono border-2 border-border-primary bg-accent-purple text-text-inverse">
-                          引用记忆：{ref.content}
-                        </span>
-                      ))}
+                  {msg.role === 'npc' && msg.metadata && typeof (msg.metadata as Record<string, unknown>).emotion === 'string' && (
+                    <div className="mt-1">
+                      <Tag variant="default" className="text-xs">{(msg.metadata as Record<string, string>).emotion}</Tag>
                     </div>
                   )}
                 </div>
