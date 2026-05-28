@@ -49,10 +49,11 @@ export async function applyAction(
   sessionId: string,
   actionType: string,
   payload: Record<string, unknown>,
+  turn?: number,
 ): Promise<StateUpdate> {
   const res = await fetchApi<StateUpdate>(`/game/sessions/${sessionId}/actions`, {
     method: 'POST',
-    body: JSON.stringify({ sessionId, actionType, payload, turn: 0 }),
+    body: JSON.stringify({ sessionId, actionType, payload, turn: turn ?? 0 }),
   })
   return res.data!
 }

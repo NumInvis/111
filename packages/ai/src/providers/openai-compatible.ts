@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z, type ZodType } from 'zod';
 import type { LlmProviderAdapter, LlmCallResult, LlmProviderConfig } from './provider-registry';
 
 interface OpenaiMessage {
@@ -53,7 +53,7 @@ export class OpenaiCompatibleProvider implements LlmProviderAdapter {
   async generate(
     prompt: string,
     model: string,
-    schema?: Record<string, unknown>,
+    schema?: Record<string, unknown> | ZodType,
     options?: { temperature?: number; seed?: number },
   ): Promise<LlmCallResult> {
     const usedModel = model || this.defaultModel;

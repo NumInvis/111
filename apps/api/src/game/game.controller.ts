@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Param, Body } from '@nestjs/common';
 import { GameService } from './game.service';
-import type { ApiResponse, GameAction, PlayerState, EndingCandidate, StateUpdate } from '@vi/shared';
+import type { ApiResponse, GameAction, PlayerState, EndingCandidate } from '@vi/shared';
+import type { StateUpdate } from '@vi/game-engine';
 
 @Controller('game')
 export class GameController {

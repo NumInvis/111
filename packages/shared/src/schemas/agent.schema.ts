@@ -21,7 +21,7 @@ export const MemoryEntrySchema = z.object({
 
 export type MemoryEntry = z.infer<typeof MemoryEntrySchema>;
 
-export const AgentTypeEnum = z.enum(['world_gen', 'npc', 'event', 'ending']);
+export const AgentTypeEnum = z.enum(['world_gen', 'npc', 'event', 'ending', 'memory']);
 
 export type AgentType = z.infer<typeof AgentTypeEnum>;
 

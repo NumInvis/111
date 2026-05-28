@@ -121,6 +121,9 @@ export class GameService {
       case 'investigate':
         stateUpdate = applyInvestigateAction(sessionId, playerState, action.payload as { target: string; depth?: string }, worldBlueprint);
         break;
+      case 'event_choice':
+        stateUpdate = applyEventChoiceAction(sessionId, playerState, action.payload as { eventId: string; optionIndex: number; attributeEffects: Record<string, number> }, worldBlueprint);
+        break;
       case 'rest':
       case 'trade':
         stateUpdate = {

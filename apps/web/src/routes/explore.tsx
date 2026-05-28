@@ -89,7 +89,7 @@ function ExplorePage() {
     setError(null)
     setIsActing(true)
     try {
-      const update = await applyAction(sessionId, 'move', { targetLocationId })
+      const update = await applyAction(sessionId, 'move', { targetLocationId }, currentYear)
       const merged = mergeState(player, update.newState)
       setPlayer(merged)
       addJournalEntries(update.journalEntries)
@@ -106,8 +106,8 @@ function ExplorePage() {
     setIsActing(true)
     try {
       const update = await applyAction(sessionId, 'discover', {
-        locationId: currentLocation?.id ?? player.currentLocationId,
-      })
+        clueId: currentLocation?.id,
+      }, currentYear)
       const merged = mergeState(player, update.newState)
       setPlayer(merged)
       addJournalEntries(update.journalEntries)
@@ -125,7 +125,7 @@ function ExplorePage() {
     try {
       const update = await applyAction(sessionId, 'investigate', {
         target: currentLocation?.id ?? player.currentLocationId,
-      })
+      }, currentYear)
       const merged = mergeState(player, update.newState)
       setPlayer(merged)
       addJournalEntries(update.journalEntries)
@@ -140,7 +140,7 @@ function ExplorePage() {
     if (!sessionId || !player) return
     setError(null)
     try {
-      const update = await applyAction(sessionId, 'talk', { npcId })
+      const update = await applyAction(sessionId, 'talk', { npcId }, currentYear)
       const merged = mergeState(player, update.newState)
       setPlayer(merged)
       addJournalEntries(update.journalEntries)
@@ -159,7 +159,7 @@ function ExplorePage() {
         eventId: activeEvent.id,
         optionIndex,
         attributeEffects: effects,
-      })
+      }, currentYear)
       const merged = mergeState(player, update.newState)
       setPlayer(merged)
       addJournalEntries(update.journalEntries)
@@ -273,7 +273,7 @@ function ExplorePage() {
             {!activeEvent && locationEvents.length > 0 && (
               <Panel title="此地事件" titleBg="purple">
                 <div className="space-y-2">
-                  {locationEvents.filter((e) => e.oneTime || !player.discoveredClues.includes(e.id)).map((e) => (
+                  {locationEvents.filter((e) => e.oneTime ? !player.discoveredLocations.includes(e.locationId) : true).map((e) => (
                     <div key={e.id}
                       onClick={() => setActiveEvent(e)}
                       className="bg-bg-card border-3 border-border-primary shadow-nb p-3 cursor-pointer hover:shadow-nb-lg transition-all">

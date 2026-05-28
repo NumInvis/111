@@ -72,7 +72,7 @@ export class LlmService implements OnModuleInit {
       ? this.promptRegistry.get(options.promptName).version
       : 'unknown';
 
-    const providerResult = await provider.generate(prompt, model, schema, {
+    const providerResult = await provider.generate(prompt, model, schema as unknown as Record<string, unknown>, {
       temperature: options?.temperature,
       seed: options?.seed,
     });
@@ -115,7 +115,7 @@ export class LlmService implements OnModuleInit {
         structuredOutputValid: true,
       });
 
-      return { data: repaired, result: providerResult };
+      return { data: repaired as T, result: providerResult };
     }
 
     const latencyMs = performance.now() - startTime;

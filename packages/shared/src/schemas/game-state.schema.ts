@@ -56,6 +56,7 @@ export const ActionTypeEnum = z.enum([
   'talk',
   'discover',
   'investigate',
+  'event_choice',
   'next_year',
   'rest',
   'trade',

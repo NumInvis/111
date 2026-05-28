@@ -4,6 +4,7 @@ import { LlmService } from '../llm/llm.service';
 import { SafetyService } from '../safety/safety.service';
 import { AuditService } from '../audit/audit.service';
 import { PromptRegistry } from '@vi/ai';
+import { z } from 'zod';
 import { WorldBlueprintSchema, PlayerStateSchema } from '@vi/shared';
 import type { WorldBlueprint, PlayerState, GenerationPreferences } from '@vi/shared';
 
@@ -44,7 +45,7 @@ export class GenerationService {
 
     const { data, result } = await this.llmService.generateWithSchema<WorldBlueprint>(
       prompt,
-      WorldBlueprintSchema,
+      WorldBlueprintSchema as z.ZodType<WorldBlueprint>,
       {
         sessionId,
         agentType: 'world_gen',

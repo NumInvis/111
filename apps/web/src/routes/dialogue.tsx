@@ -50,7 +50,7 @@ function DialoguePage() {
     try {
       await startDialogue(sessionId, npcId)
       if (player) {
-        const update = await applyAction(sessionId, 'talk', { npcId })
+        const update = await applyAction(sessionId, 'talk', { npcId }, player.age)
         if (update.journalEntries.length > 0) addJournalEntries(update.journalEntries)
         if (update.newState) {
           useGameStore.getState().setPlayer({ ...player, ...update.newState } as import('@/types').PlayerState)
@@ -83,7 +83,7 @@ function DialoguePage() {
       await applyAction(sessionId, 'talk', {
         npcId: activeNpc.id,
         message: input.trim(),
-      })
+      }, player.age)
 
       const npcMsg: DialogueMessage = {
         id: `${Date.now() + 1}-npc`,
@@ -152,8 +152,8 @@ function DialoguePage() {
             </div>
           )}
           {relationship && (
-            <Tag variant={relationship.trust >= 70 ? 'success' : relationship.trust >= 40 ? 'info' : 'warning'}>
-              信任 {Math.round(relationship.trust)}% · {relationship.friendshipLevel}
+            <Tag variant={relationship.trust >= 0.7 ? 'success' : relationship.trust >= 0.4 ? 'info' : 'warning'}>
+              信任 {Math.round(relationship.trust * 100)}% · {relationship.friendshipLevel}
             </Tag>
           )}
           <Link to="/journal"><Button variant="ghost" size="icon"><Scroll className="w-5 h-5" /></Button></Link>

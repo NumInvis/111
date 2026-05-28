@@ -147,6 +147,25 @@ export class ActionValidator {
         return { allowed: true };
       }
 
+      case 'event_choice': {
+        const eventId = payload.eventId as string | undefined;
+        const optionIndex = payload.optionIndex as number | undefined;
+        if (!eventId) {
+          return { allowed: false, reason: 'Event choice action requires eventId in payload.' };
+        }
+        if (optionIndex === undefined) {
+          return { allowed: false, reason: 'Event choice action requires optionIndex in payload.' };
+        }
+        const event = worldBlueprint.events.find((e) => e.id === eventId);
+        if (!event) {
+          return { allowed: false, reason: `Event "${eventId}" does not exist in this world.` };
+        }
+        if (optionIndex < 0 || optionIndex >= event.options.length) {
+          return { allowed: false, reason: `Option index ${optionIndex} out of range for event "${eventId}".` };
+        }
+        return { allowed: true };
+      }
+
       case 'rest': {
         return { allowed: true };
       }
