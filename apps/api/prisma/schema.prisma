@@ -1,0 +1,164 @@
+datasource db {
+  provider = postgresql
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  sessions  GameSession[]
+}
+
+model GameSession {
+  id        String   @id @default(uuid())
+  userId    String?
+  status    String   @default("active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user            User?
+  worldBlueprint  WorldBlueprint?
+  gameStates      GameState[]
+  dialogueMessages DialogueMessage[]
+  worldEvents     WorldEvent[]
+  journalEntries  JournalEntry[]
+  agentMemories   AgentMemory[]
+  llmCalls        LlmCall[]
+  safetyEvents    SafetyEvent[]
+
+  @@relation(fields: [userId], references: [id])
+}
+
+model WorldBlueprint {
+  id            String   @id @default(uuid())
+  sessionId     String   @unique
+  generationId  String   @default(uuid())
+  promptVersion String
+  model         String
+  provider      String
+  seed          Int      @default(0)
+  data          Json
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  session GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model GameState {
+  id        String   @id @default(uuid())
+  sessionId String
+  turn      Int      @default(0)
+  data      Json
+  createdAt DateTime @default(now())
+
+  session GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model DialogueMessage {
+  id        String   @id @default(uuid())
+  sessionId String
+  npcId     String
+  role      String
+  content   String
+  metadata  Json?
+  turn      Int      @default(0)
+  createdAt DateTime @default(now())
+
+  session GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model WorldEvent {
+  id        String   @id @default(uuid())
+  sessionId String
+  eventType String
+  data      Json
+  turn      Int      @default(0)
+  createdAt DateTime @default(now())
+
+  session GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model JournalEntry {
+  id          String    @id @default(uuid())
+  sessionId   String
+  turn        Int
+  locationId  String?
+  action      String
+  result      String
+  evidenceTag Boolean   @default(false)
+  category    String
+  createdAt   DateTime  @default(now())
+
+  session GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model AgentMemory {
+  id          String   @id @default(uuid())
+  npcId       String
+  sessionId   String?
+  memoryType  String
+  content     String
+  importance  Float    @default(0.5)
+  source      String
+  embedding   Bytes?
+  createdAt   DateTime @default(now())
+
+  session GameSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model LlmCall {
+  id                   String   @id @default(uuid())
+  sessionId            String?
+  traceId              String   @default(uuid())
+  agentType            String?
+  model                String
+  provider             String
+  promptVersion        String
+  inputHash            String?
+  outputHash           String?
+  latencyMs            Int
+  tokenUsage           Json?
+  safetyResult         Json?
+  structuredOutputValid Boolean  @default(false)
+  toolsCalled          Json?
+  checkpointId         String?
+  createdAt            DateTime @default(now())
+
+  session GameSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model SafetyEvent {
+  id        String   @id @default(uuid())
+  sessionId String
+  eventType String
+  severity  String   @default("low")
+  details   Json
+  createdAt DateTime @default(now())
+
+  session GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model PromptVersion {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  version   String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ProviderConfig {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  type      String
+  baseUrl   String?
+  apiKeyEnv String?
+  model     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

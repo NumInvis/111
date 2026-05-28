@@ -1,0 +1,252 @@
+import type {
+  PlayerState,
+  WorldBlueprint,
+  ActionType,
+  EndingCandidate,
+  RealmName,
+} from '@variational-infinity/shared';
+
+export type GamePhase =
+  | 'initializing'
+  | 'exploring'
+  | 'dialoguing'
+  | 'event'
+  | 'ending_check'
+  | 'ended'
+  | 'death';
+
+export interface GameStateSnapshot {
+  phase: GamePhase;
+  turn: number;
+  playerState: PlayerState;
+  worldBlueprint: WorldBlueprint;
+  pendingActions: ActionType[];
+  safetyFlags: string[];
+}
+
+export interface StateTransition {
+  from: GamePhase;
+  to: GamePhase;
+  action: string;
+  condition?: (snapshot: GameStateSnapshot) => boolean;
+}
+
+const TRANSITIONS: StateTransition[] = [
+  {
+    from: 'initializing',
+    to: 'exploring',
+    action: 'world_generated',
+  },
+  {
+    from: 'exploring',
+    to: 'dialoguing',
+    action: 'talk',
+  },
+  {
+    from: 'exploring',
+    to: 'event',
+    action: 'next_year',
+  },
+  {
+    from: 'exploring',
+    to: 'event',
+    action: 'discover',
+  },
+  {
+    from: 'exploring',
+    to: 'event',
+    action: 'investigate',
+  },
+  {
+    from: 'exploring',
+    to: 'ending_check',
+    action: 'ending_candidate',
+    condition: (snap) => hasSufficientEvidence(snap),
+  },
+  {
+    from: 'dialoguing',
+    to: 'exploring',
+    action: 'end_dialogue',
+  },
+  {
+    from: 'event',
+    to: 'exploring',
+    action: 'resolve_event',
+  },
+  {
+    from: 'ending_check',
+    to: 'exploring',
+    action: 'continue',
+  },
+  {
+    from: 'ending_check',
+    to: 'ended',
+    action: 'trigger_ending',
+  },
+  {
+    from: 'exploring',
+    to: 'death',
+    action: 'death',
+    condition: (snap) =>
+      snap.playerState.age >= snap.playerState.lifespan ||
+      snap.safetyFlags.includes('death_event'),
+  },
+];
+
+function hasSufficientEvidence(snapshot: GameStateSnapshot): boolean {
+  const candidates = snapshot.worldBlueprint.endingCandidates;
+  return candidates.some(
+    (c) =>
+      c.requiredEvidence.every((id) =>
+        snapshot.playerState.discoveredClues.includes(id),
+      ) &&
+      (!c.requiredRealm ||
+        realmOrder(snapshot.playerState.realm) >=
+          realmOrder(c.requiredRealm as RealmName)),
+  );
+}
+
+const REALM_ORDER: Record<RealmName, number> = {
+  '炼体': 0,
+  '练气': 1,
+  '筑基': 2,
+  '本元': 3,
+  '通明': 4,
+  '化神': 5,
+  '归一': 6,
+  '渡劫': 7,
+  '天门': 8,
+  '仙境': 9,
+  '圣境': 10,
+  '变分境': 11,
+  '天道境': 12,
+  '无限': 13,
+};
+
+function realmOrder(realm: RealmName): number {
+  return REALM_ORDER[realm] ?? -1;
+}
+
+interface EndingArbitrator {
+  checkEndingCandidate(
+    candidate: EndingCandidate,
+    playerState: PlayerState,
+  ): boolean;
+  checkAllEndingCandidates(
+    candidates: EndingCandidate[],
+    playerState: PlayerState,
+  ): EndingCandidate[];
+}
+
+const endingArbitrator: EndingArbitrator = {
+  checkEndingCandidate(candidate, playerState) {
+    const evidenceMet = candidate.requiredEvidence.every((id) =>
+      playerState.discoveredClues.includes(id),
+    );
+    const realmMet =
+      !candidate.requiredRealm ||
+      realmOrder(playerState.realm) >=
+        realmOrder(candidate.requiredRealm as RealmName);
+    return evidenceMet && realmMet;
+  },
+  checkAllEndingCandidates(candidates, playerState) {
+    return candidates.filter((c) =>
+      endingArbitrator.checkEndingCandidate(c, playerState),
+    );
+  },
+};
+
+export class GameStateMachine {
+  private snapshot: GameStateSnapshot;
+
+  constructor(initialSnapshot: GameStateSnapshot) {
+    this.snapshot = initialSnapshot;
+  }
+
+  getCurrentState(): GameStateSnapshot {
+    return this.snapshot;
+  }
+
+  getPhase(): GamePhase {
+    return this.snapshot.phase;
+  }
+
+  canTransition(action: string): boolean {
+    const matching = TRANSITIONS.filter(
+      (t) =>
+        t.from === this.snapshot.phase &&
+        t.action === action,
+    );
+
+    if (matching.length === 0) return false;
+
+    return matching.every(
+      (t) => !t.condition || t.condition(this.snapshot),
+    );
+  }
+
+  transition(action: string): GameStateSnapshot {
+    const matching = TRANSITIONS.filter(
+      (t) =>
+        t.from === this.snapshot.phase &&
+        t.action === action,
+    );
+
+    if (matching.length === 0) {
+      throw new Error(
+        `No valid transition from "${this.snapshot.phase}" with action "${action}".`,
+      );
+    }
+
+    const transition = matching.find(
+      (t) => !t.condition || t.condition(this.snapshot),
+    );
+
+    if (!transition) {
+      throw new Error(
+        `Transition condition not met for "${action}" from "${this.snapshot.phase}".`,
+      );
+    }
+
+    this.snapshot = {
+      ...this.snapshot,
+      phase: transition.to,
+    };
+
+    return this.snapshot;
+  }
+
+  updatePlayerState(partial: Partial<PlayerState>): GameStateSnapshot {
+    this.snapshot = {
+      ...this.snapshot,
+      playerState: { ...this.snapshot.playerState, ...partial },
+    };
+    return this.snapshot;
+  }
+
+  addSafetyFlag(flag: string): GameStateSnapshot {
+    if (!this.snapshot.safetyFlags.includes(flag)) {
+      this.snapshot = {
+        ...this.snapshot,
+        safetyFlags: [...this.snapshot.safetyFlags, flag],
+      };
+    }
+    return this.snapshot;
+  }
+
+  getAvailableActions(): string[] {
+    return TRANSITIONS
+      .filter((t) => t.from === this.snapshot.phase)
+      .filter((t) => !t.condition || t.condition(this.snapshot))
+      .map((t) => t.action);
+  }
+
+  checkEndingCandidates(): EndingCandidate[] {
+    return endingArbitrator.checkAllEndingCandidates(
+      this.snapshot.worldBlueprint.endingCandidates,
+      this.snapshot.playerState,
+    );
+  }
+}
+
+export { endingArbitrator, REALM_ORDER, realmOrder };

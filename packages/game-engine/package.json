@@ -1,0 +1,14 @@
+{
+  "name": "@variational-infinity/game-engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@variational-infinity/shared": "workspace:*",
+    "zod": "^3"
+  },
+  "devDependencies": {
+    "typescript": "^5"
+  }
+}

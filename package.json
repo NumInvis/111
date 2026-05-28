@@ -1,0 +1,26 @@
+{
+  "name": "variational-infinity",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.1.1",
+  "engines": {
+    "node": ">=22",
+    "pnpm": ">=11"
+  },
+  "scripts": {
+    "dev:api": "pnpm --filter @variational-infinity/api dev",
+    "dev:web": "pnpm --filter @variational-infinity/web dev",
+    "dev:agent": "cd apps/agent-service && uv run uvicorn app.main:app --reload --port 8000",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "db:push": "pnpm --filter @variational-infinity/api prisma db push",
+    "db:migrate": "pnpm --filter @variational-infinity/api prisma migrate dev",
+    "db:generate": "pnpm --filter @variational-infinity/api prisma generate"
+  },
+  "onlyBuiltDependencies": [
+    "esbuild"
+  ]
+}

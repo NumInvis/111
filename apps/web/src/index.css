@@ -1,0 +1,121 @@
+@import "tailwindcss";
+
+@theme {
+  /* Colors */
+  --color-primary: #FFD700;
+  --color-secondary: #1A1A2E;
+  --color-accent-red: #FF6B6B;
+  --color-accent-cyan: #4ECDC4;
+  --color-accent-green: #95E1D3;
+  --color-accent-purple: #AA96DA;
+
+  --color-bg-paper: #F5F5DC;
+  --color-bg-card: #FFFFFF;
+  --color-bg-dark: #1A1A2E;
+  --color-bg-highlight: #FFFACD;
+
+  --color-text-primary: #1A1A2E;
+  --color-text-secondary: #555555;
+  --color-text-inverse: #FFFFFF;
+
+  --color-border-primary: #000000;
+  --color-border-accent: #FFD700;
+  --color-border-subtle: #CCCCCC;
+
+  /* Font Family */
+  --font-mono: 'Space Mono', 'JetBrains Mono', monospace;
+  --font-sans: 'Noto Sans SC', 'Inter', sans-serif;
+
+  /* Box Shadows */
+  --shadow-nb: 4px 4px 0px #000000;
+  --shadow-nb-sm: 2px 2px 0px #000000;
+  --shadow-nb-lg: 6px 6px 0px #000000;
+  --shadow-nb-xl: 8px 8px 0px #000000;
+
+  /* Border Radius */
+  --radius-nb: 0px;
+  --radius-nb-sm: 4px;
+}
+
+/* Base styles */
+html {
+  background-color: var(--color-bg-paper);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-bg-paper);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-primary);
+  border-radius: 0;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-secondary);
+}
+
+/* Selection */
+::selection {
+  background: var(--color-primary);
+  color: var(--color-text-primary);
+}
+
+/* Focus visible */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Neo Brutalism utility classes */
+.nb-border {
+  border: 3px solid var(--color-border-primary);
+}
+
+.nb-border-2 {
+  border: 2px solid var(--color-border-primary);
+}
+
+.nb-shadow {
+  box-shadow: var(--shadow-nb);
+}
+
+.nb-shadow-sm {
+  box-shadow: var(--shadow-nb-sm);
+}
+
+.nb-shadow-lg {
+  box-shadow: var(--shadow-nb-lg);
+}
+
+.nb-shadow-xl {
+  box-shadow: var(--shadow-nb-xl);
+}
+
+.nb-hover {
+  transition: all 0.15s ease;
+}
+
+.nb-hover:hover {
+  box-shadow: var(--shadow-nb-xl);
+  transform: translate(-2px, -2px);
+}
+
+.nb-active:active {
+  box-shadow: var(--shadow-nb-sm);
+  transform: translate(1px, 1px);
+}

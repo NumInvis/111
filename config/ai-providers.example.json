@@ -1,0 +1,33 @@
+{
+  "activeProvider": "mock",
+  "providers": {
+    "mock": {
+      "type": "mock",
+      "model": "local-mock",
+      "baseUrl": ""
+    },
+    "openai-compatible": {
+      "type": "openai-compatible",
+      "model": "",
+      "baseUrl": "",
+      "apiKeyEnv": "AI_API_KEY"
+    },
+    "custom": {
+      "type": "custom",
+      "model": "",
+      "baseUrl": "",
+      "apiKeyEnv": "AI_API_KEY"
+    },
+    "future.tencent-cloud": {
+      "type": "future.tencent-cloud",
+      "model": "",
+      "baseUrl": "",
+      "apiKeyEnv": "AI_API_KEY"
+    }
+  },
+  "runtimeSafety": {
+    "allowClientSideKeyForPrototypeOnly": false,
+    "requireServerProxyForProduction": true,
+    "redactKeysInLogs": true
+  }
+}
