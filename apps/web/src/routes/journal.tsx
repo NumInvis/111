@@ -33,6 +33,8 @@ const CATEGORY_COLORS: Record<JournalCategory, string> = {
 function JournalPage() {
   const { player, currentYear, worldBlueprint, journal } = useGameStore()
 
+  const clueNameMap = new Map(worldBlueprint?.clues?.map((c) => [c.id, c.name]) ?? [])
+
   if (!worldBlueprint) {
     return (
       <div className="min-h-screen bg-bg-paper flex items-center justify-center">
@@ -136,7 +138,7 @@ function JournalPage() {
                   <div className="flex flex-wrap gap-1">
                     {player.discoveredClues.map((clue) => (
                       <span key={clue} className="px-2 py-0.5 text-xs font-mono border-2 border-border-primary bg-accent-cyan">
-                        <Shield className="w-3 h-3 inline mr-1" />{clue}
+                        <Shield className="w-3 h-3 inline mr-1" />{clueNameMap.get(clue) ?? clue}
                       </span>
                     ))}
                   </div>

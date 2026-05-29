@@ -27,12 +27,19 @@ async function fetchApi<T>(path: string, init?: RequestInit): Promise<ApiRespons
   return wrapper
 }
 
+function requireData<T>(res: ApiResponse<T>, label: string): T {
+  if (res.data === undefined || res.data === null) {
+    throw new Error(`API response missing data for ${label}`)
+  }
+  return res.data
+}
+
 export async function createSession(userId?: string): Promise<{ id: string; status: string }> {
   const res = await fetchApi<{ id: string; status: string }>('/game/sessions', {
     method: 'POST',
     body: JSON.stringify({ userId }),
   })
-  return res.data!
+  return requireData(res, 'createSession')
 }
 
 export async function getSession(id: string) {
@@ -42,7 +49,7 @@ export async function getSession(id: string) {
 
 export async function getGameState(id: string): Promise<PlayerState> {
   const res = await fetchApi<PlayerState>(`/game/sessions/${id}/state`)
-  return res.data!
+  return requireData(res, 'getGameState')
 }
 
 export async function applyAction(
@@ -55,7 +62,7 @@ export async function applyAction(
     method: 'POST',
     body: JSON.stringify({ sessionId, actionType, payload, turn: turn ?? 0 }),
   })
-  return res.data!
+  return requireData(res, 'applyAction')
 }
 
 export async function generateWorld(
@@ -66,7 +73,7 @@ export async function generateWorld(
     method: 'POST',
     body: JSON.stringify(preferences),
   })
-  return res.data!
+  return requireData(res, 'generateWorld')
 }
 
 export async function getWorldBlueprint(sessionId: string): Promise<WorldBlueprint | null> {
@@ -78,7 +85,7 @@ export async function nextYear(sessionId: string): Promise<StateUpdate> {
   const res = await fetchApi<StateUpdate>(`/game/sessions/${sessionId}/next-year`, {
     method: 'POST',
   })
-  return res.data!
+  return requireData(res, 'nextYear')
 }
 
 export async function startDialogue(
@@ -89,7 +96,7 @@ export async function startDialogue(
     method: 'POST',
     body: JSON.stringify({ npcId }),
   })
-  return res.data!
+  return requireData(res, 'startDialogue')
 }
 
 export async function sendDialogueMessage(
@@ -101,7 +108,7 @@ export async function sendDialogueMessage(
     method: 'POST',
     body: JSON.stringify({ npcId, message }),
   })
-  return res.data!
+  return requireData(res, 'sendDialogueMessage')
 }
 
 export async function triggerEnding(
@@ -112,10 +119,8 @@ export async function triggerEnding(
     method: 'POST',
     body: JSON.stringify({ endingId }),
   })
-  return res.data!
+  return requireData(res, 'triggerEnding')
 }
-
-
 
 export async function checkEndings(sessionId: string): Promise<EndingCandidate[]> {
   const res = await fetchApi<EndingCandidate[]>(`/game/sessions/${sessionId}/endings`)
@@ -126,7 +131,7 @@ export async function endSession(sessionId: string): Promise<{ id: string; statu
   const res = await fetchApi<{ id: string; status: string }>(`/game/sessions/${sessionId}/end`, {
     method: 'POST',
   })
-  return res.data!
+  return requireData(res, 'endSession')
 }
 
 const SCALE_MAP: Record<string, GenerationScale> = {
@@ -145,7 +150,7 @@ export function toGenPref(pref: { direction: string; mode: string; seed?: number
   return {
     theme: pref.direction,
     scale: SCALE_MAP[pref.mode] ?? 'medium',
-    tone: pref.direction,
+    tone: 'immersive',
     seed: pref.seed,
     mode: MODE_MAP[pref.mode] ?? 'complete',
   }
@@ -153,5 +158,5 @@ export function toGenPref(pref: { direction: string; mode: string; seed?: number
 
 export async function getProviders(): Promise<{ active: string; available: string[] }> {
   const res = await fetchApi<{ active: string; available: string[] }>('/llm/providers')
-  return res.data!
+  return requireData(res, 'getProviders')
 }

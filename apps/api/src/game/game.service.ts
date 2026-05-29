@@ -30,6 +30,8 @@ import {
   EventTypeEnum,
   JournalCategoryEnum,
   AttributeNameEnum,
+  NpcDialogueOutputSchema,
+  EndingOutputSchema,
 } from '@variational-infinity/shared';
 import type {
   WorldBlueprint,
@@ -41,34 +43,7 @@ import type {
 } from '@variational-infinity/shared';
 import { PromptRegistryService } from '../llm/prompt-registry.service';
 
-const NpcDialogueOutputSchema = z.object({
-  role: z.enum(['npc']),
-  content: z.string(),
-  metadata: z.object({
-    emotion: z.string(),
-    trustChange: z.number().min(-0.1).max(0.1),
-    hintAtSecret: z.boolean().optional(),
-    suggestedActions: z.array(z.string()).optional(),
-  }).optional(),
-});
-
 const NPC_DIALOGUE_ALLOWED_FIELDS = ['role', 'content', 'metadata'];
-
-const EndingOutputSchema = z.object({
-  eligibleEndings: z.array(z.object({
-    id: z.string(),
-    title: z.string(),
-    description: z.string(),
-    requiredEvidence: z.array(z.string()),
-    requiredRealm: z.string().optional(),
-    tone: z.string(),
-    evidenceFulfilled: z.boolean(),
-  })),
-  ineligibleEndings: z.array(z.object({
-    id: z.string(),
-    reason: z.string(),
-  })),
-});
 
 @Injectable()
 export class GameService {
@@ -106,14 +81,15 @@ export class GameService {
     return WorldBlueprintSchema.parse(data);
   }
 
-  private async loadPlayerState(sessionId: string): Promise<PlayerState> {
+  private async loadPlayerState(sessionId: string): Promise<{ playerState: PlayerState; phase: string }> {
     const session = await this.loadSession(sessionId);
     const record = session.gameStates[0];
     if (!record) throw new BadRequestException(`No game state for session "${sessionId}".`);
-    return PlayerStateSchema.parse(record.data);
+    const phase = (record as Record<string, unknown>).phase as string | undefined ?? 'initializing';
+    return { playerState: PlayerStateSchema.parse(record.data), phase };
   }
 
-  private async persistStateUpdate(sessionId: string, playerState: PlayerState, stateUpdate: StateUpdate) {
+  private async persistStateUpdate(sessionId: string, playerState: PlayerState, stateUpdate: StateUpdate, phase: string) {
     const mergedState: PlayerState = { ...playerState, ...stateUpdate.newState };
     if (stateUpdate.newState.attributes) {
       mergedState.attributes = { ...playerState.attributes, ...stateUpdate.newState.attributes };
@@ -133,7 +109,7 @@ export class GameService {
 
     await this.prisma.$transaction([
       this.prisma.gameState.create({
-        data: { sessionId, turn: mergedState.age, data: mergedState as object },
+        data: { sessionId, turn: mergedState.age, phase, data: mergedState as object },
       }),
       ...stateUpdate.journalEntries.map((entry) =>
         this.prisma.journalEntry.create({
@@ -190,7 +166,20 @@ export class GameService {
     }
 
     const worldBlueprint = await this.loadWorldBlueprint(sessionId);
-    const playerState = await this.loadPlayerState(sessionId);
+    const { playerState, phase } = await this.loadPlayerState(sessionId);
+
+    const stateMachine = new GameStateMachine({
+      phase: phase as 'initializing' | 'exploring' | 'dialoguing' | 'event' | 'ending_check' | 'ended' | 'death',
+      turn: playerState.age,
+      playerState,
+      worldBlueprint,
+      pendingActions: [],
+      safetyFlags: [],
+    });
+
+    if (!stateMachine.canTransition(action.actionType)) {
+      throw new BadRequestException(`Cannot ${action.actionType} from phase "${phase}".`);
+    }
 
     const validationResult = this.actionValidator.validateAction(
       worldBlueprint, playerState, action.actionType, action.payload,
@@ -234,7 +223,10 @@ export class GameService {
         throw new BadRequestException(`Unsupported action type: "${action.actionType}".`);
     }
 
-    const mergedState = await this.persistStateUpdate(sessionId, playerState, stateUpdate);
+    stateMachine.transition(action.actionType);
+    const newPhase = stateMachine.getPhase();
+
+    const mergedState = await this.persistStateUpdate(sessionId, playerState, stateUpdate, newPhase);
 
     await this.auditService.logStateChange(sessionId, `action:${action.actionType}`, {
       actionType: action.actionType,
@@ -255,18 +247,38 @@ export class GameService {
     }
 
     const worldBlueprint = await this.loadWorldBlueprint(sessionId);
-    const playerState = await this.loadPlayerState(sessionId);
+    const { playerState, phase } = await this.loadPlayerState(sessionId);
+
+    const stateMachine = new GameStateMachine({
+      phase: phase as 'initializing' | 'exploring' | 'dialoguing' | 'event' | 'ending_check' | 'ended' | 'death',
+      turn: playerState.age,
+      playerState,
+      worldBlueprint,
+      pendingActions: [],
+      safetyFlags: [],
+    });
+
+    if (!stateMachine.canTransition('next_year')) {
+      throw new BadRequestException(`Cannot advance year from phase "${phase}".`);
+    }
 
     const stateUpdate = applyNextYearAction(sessionId, playerState, {}, worldBlueprint);
 
-    const mergedState = await this.persistStateUpdate(sessionId, playerState, stateUpdate);
+    stateMachine.transition('next_year');
+    let newPhase = stateMachine.getPhase();
 
-    if (mergedState.age >= mergedState.lifespan) {
-      await this.prisma.gameSession.update({
-        where: { id: sessionId },
-        data: { status: 'death' },
-      });
+    if (stateUpdate.newState.age !== undefined && stateUpdate.newState.lifespan !== undefined && stateUpdate.newState.age >= stateUpdate.newState.lifespan) {
+      if (stateMachine.canTransition('death')) {
+        stateMachine.transition('death');
+        newPhase = stateMachine.getPhase();
+        await this.prisma.gameSession.update({
+          where: { id: sessionId },
+          data: { status: 'death' },
+        });
+      }
     }
+
+    const mergedState = await this.persistStateUpdate(sessionId, playerState, stateUpdate, newPhase);
 
     await this.auditService.logStateChange(sessionId, 'next_year', {
       newAge: mergedState.age,
@@ -282,7 +294,7 @@ export class GameService {
 
   async checkEnding(sessionId: string): Promise<EndingCandidate[]> {
     const worldBlueprint = await this.loadWorldBlueprint(sessionId);
-    const playerState = await this.loadPlayerState(sessionId);
+    const { playerState } = await this.loadPlayerState(sessionId);
 
     return this.endingArbitrator.checkAllEndingCandidates(
       worldBlueprint.endingCandidates, playerState, worldBlueprint,
@@ -296,7 +308,7 @@ export class GameService {
     }
 
     const worldBlueprint = await this.loadWorldBlueprint(sessionId);
-    const playerState = await this.loadPlayerState(sessionId);
+    const { playerState } = await this.loadPlayerState(sessionId);
 
     const candidate = worldBlueprint.endingCandidates.find((c) => c.id === endingId);
     if (!candidate) {
@@ -396,10 +408,10 @@ export class GameService {
       throw new BadRequestException(`NPC "${npcId}" not found in world blueprint.`);
     }
 
-    const playerState = await this.loadPlayerState(sessionId);
+    const { playerState, phase } = await this.loadPlayerState(sessionId);
 
     const stateMachine = new GameStateMachine({
-      phase: 'exploring',
+      phase: phase as 'initializing' | 'exploring' | 'dialoguing' | 'event' | 'ending_check' | 'ended' | 'death',
       turn: playerState.age,
       playerState,
       worldBlueprint,
@@ -412,6 +424,14 @@ export class GameService {
     }
 
     stateMachine.transition('talk');
+
+    await this.prisma.gameState.create({
+      data: {
+        sessionId,
+        turn: playerState.age,
+        data: { ...playerState, phase: 'dialoguing' } as object,
+      },
+    });
 
     await this.auditService.logStateChange(sessionId, 'dialogue_started', {
       npcId,
@@ -444,7 +464,7 @@ export class GameService {
       throw new BadRequestException(`NPC "${npcId}" not found.`);
     }
 
-    const playerState = await this.loadPlayerState(sessionId);
+    const { playerState } = await this.loadPlayerState(sessionId);
 
     const npcMemories = await this.prisma.agentMemory.findMany({
       where: { npcId, sessionId },
@@ -595,12 +615,17 @@ export class GameService {
   }
 
   async getState(sessionId: string): Promise<PlayerState> {
-    return await this.loadPlayerState(sessionId);
+    const { playerState } = await this.loadPlayerState(sessionId);
+    return playerState;
+  }
+
+  async loadPlayerStateInternal(sessionId: string): Promise<{ playerState: PlayerState; phase: string }> {
+    return this.loadPlayerState(sessionId);
   }
 
   async getBreakthroughStatus(sessionId: string): Promise<{ canAttempt: boolean; nextRealm: string | null; reason: string }> {
     const worldBlueprint = await this.loadWorldBlueprint(sessionId);
-    const playerState = await this.loadPlayerState(sessionId);
+    const { playerState } = await this.loadPlayerState(sessionId);
 
     const result = this.realmAdvancementChecker.checkRealmAdvancement(
       playerState.realm,
@@ -663,7 +688,10 @@ export class GameService {
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this.logger.warn(`Agent memory sync skipped for session ${sessionId}: ${message}`);
+      this.logger.error(`Agent memory sync FAILED for session ${sessionId}: ${message}`);
+      try {
+        await this.auditService.logSafetyEvent(sessionId, 'memory_sync_failed', 'high', { error: message });
+      } catch { /* audit write failure should not mask original error */ }
     }
   }
 

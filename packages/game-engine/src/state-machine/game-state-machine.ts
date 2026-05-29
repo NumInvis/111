@@ -7,7 +7,7 @@ import type {
   TriggerCondition,
 } from '@variational-infinity/shared';
 import { evaluateTriggerCondition } from '../rules/rules';
-import { REALM_ORDER, realmOrder } from '../constants/realm-constants';
+import { REALM_ORDER, realmOrder, requireRealmOrder } from '../constants/realm-constants';
 
 export type GamePhase =
   | 'initializing'
@@ -115,7 +115,7 @@ function hasSufficientEvidence(snapshot: GameStateSnapshot): boolean {
       ) &&
       (!c.requiredRealm ||
         realmOrder(snapshot.playerState.realm) >=
-          realmOrder(c.requiredRealm as RealmName)),
+          requireRealmOrder(c.requiredRealm)),
   );
 }
 
@@ -215,7 +215,7 @@ export class GameStateMachine {
         ) &&
         (!c.requiredRealm ||
           realmOrder(this.snapshot.playerState.realm) >=
-            realmOrder(c.requiredRealm as RealmName)),
+            requireRealmOrder(c.requiredRealm)),
     );
   }
 

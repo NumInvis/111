@@ -7,7 +7,7 @@ import type {
   Clue,
   TriggerCondition,
 } from '@variational-infinity/shared';
-import { realmOrder, REALM_ORDER, REALM_NAMES_ORDERED } from '../constants/realm-constants';
+import { realmOrder, requireRealmOrder, REALM_ORDER, REALM_NAMES_ORDERED } from '../constants/realm-constants';
 import type { RealmName } from '@variational-infinity/shared';
 
 export interface RuleCheckResult {
@@ -50,7 +50,7 @@ export class EndingArbitrator {
 
     if (candidate.requiredRealm) {
       const playerRealmIdx = realmOrder(playerState.realm);
-      const requiredRealmIdx = realmOrder(candidate.requiredRealm as RealmName);
+      const requiredRealmIdx = requireRealmOrder(candidate.requiredRealm);
       if (playerRealmIdx < requiredRealmIdx) {
         return {
           allowed: false,
@@ -277,7 +277,7 @@ export function evaluateTriggerCondition(
 ): boolean {
   if (condition.minRealm) {
     const playerRealmIdx = realmOrder(playerState.realm);
-    const requiredRealmIdx = realmOrder(condition.minRealm as RealmName);
+    const requiredRealmIdx = requireRealmOrder(condition.minRealm);
     if (playerRealmIdx < requiredRealmIdx) return false;
   }
   if (condition.minAge !== undefined && playerState.age < condition.minAge) return false;

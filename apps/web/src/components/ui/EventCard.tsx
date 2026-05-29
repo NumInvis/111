@@ -1,4 +1,6 @@
 import type { EventSeed } from '@/types'
+import { ATTRIBUTE_LABELS } from '@/types'
+import type { AttributeKey } from '@/types'
 
 interface EventCardProps {
   event: EventSeed
@@ -9,7 +11,7 @@ export function EventCard({ event, onSelectOption }: EventCardProps) {
   return (
     <div className="bg-bg-card border-3 border-border-primary shadow-nb-lg">
       <div className="bg-bg-dark text-text-inverse px-6 py-3 border-b-3 border-border-primary flex justify-between">
-        <h3 className="font-mono text-lg font-bold">{event.description}</h3>
+        <h3 className="font-mono text-lg font-bold">事件发生</h3>
         <span className="font-mono text-sm opacity-80">地点: {event.locationId}</span>
       </div>
       <div className="p-6">
@@ -32,7 +34,7 @@ export function EventCard({ event, onSelectOption }: EventCardProps) {
                 <div className="flex flex-wrap gap-1 mt-2">
                   {Object.entries(opt.attributeEffects).map(([attr, delta]) => (
                     <span key={attr} className="px-1 py-0.5 text-xs font-mono border border-border-primary bg-accent-cyan">
-                      {attr} {delta > 0 ? '+' : ''}{delta}
+                      {ATTRIBUTE_LABELS[attr as AttributeKey] ?? attr} {delta > 0 ? '+' : ''}{delta}
                     </span>
                   ))}
                 </div>

@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from app.agents.memory_agent import summarize_memory
 from app.dependencies import get_settings
 from app.memory.store import MemoryStore
+from app.safety.pipeline import check_input_safety
 from app.schemas.models import MemoryEntry
 
 router = APIRouter()
@@ -36,6 +37,9 @@ async def retrieve_memories(session_id: str, npc_id: str, limit: int = 20):
 
 @router.post("/{session_id}/summarize", response_model=list[MemoryEntry])
 async def summarize_memories(session_id: str, body: SummarizeRequest):
+    safety_result = check_input_safety(body.raw_content)
+    if not safety_result.safe:
+        raise HTTPException(status_code=400, detail=f"Input safety check failed: {safety_result.errors}")
     settings = get_settings()
     try:
         summaries = await summarize_memory(body.raw_content, body.npc_id, settings)

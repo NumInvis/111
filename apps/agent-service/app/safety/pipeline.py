@@ -31,13 +31,13 @@ INJECTION_PATTERNS: list[tuple[re.Pattern, float]] = [
 ]
 
 SECRET_PATTERNS: list[tuple[re.Pattern, str]] = [
-    (re.compile(r"api[_-]?key", re.IGNORECASE), "API key reference"),
-    (re.compile(r"secret", re.IGNORECASE), "Secret reference"),
-    (re.compile(r"password", re.IGNORECASE), "Password reference"),
-    (re.compile(r"authorization", re.IGNORECASE), "Authorization header"),
-    (re.compile(r"bearer\s+", re.IGNORECASE), "Bearer token"),
+    (re.compile(r"api[_-]?key\s*[=:]\s*\S+", re.IGNORECASE), "API key assignment"),
+    (re.compile(r"secret\s*[=:]\s*\S+", re.IGNORECASE), "Secret assignment"),
+    (re.compile(r"password\s*[=:]\s*\S+", re.IGNORECASE), "Password assignment"),
+    (re.compile(r"authorization\s*:\s*Bearer\s+\S+", re.IGNORECASE), "Authorization header"),
+    (re.compile(r"Bearer\s+[A-Za-z0-9\-._~+/]+=*", re.IGNORECASE), "Bearer token"),
     (re.compile(r"sk-[a-zA-Z0-9]{8,}", re.IGNORECASE), "Exposed API key (sk-*)"),
-    (re.compile(r"token\s*[=:]", re.IGNORECASE), "Token assignment"),
+    (re.compile(r"token\s*[=:]\s*\S+", re.IGNORECASE), "Token assignment"),
 ]
 
 OUTPUT_INJECTION_PATTERNS: list[re.Pattern] = [
@@ -110,9 +110,9 @@ def check_field_allowlist(data: dict, allowed_fields: set[str]) -> SafetyResult:
     extra_fields = set(data.keys()) - allowed_fields
     if extra_fields:
         return SafetyResult(
-            safe=True,
+            safe=False,
             injection_score=None,
-            errors=[f"Extra fields not in allowlist (warning): {', '.join(sorted(extra_fields))}. Allowed: {', '.join(sorted(allowed_fields))}"],
+            errors=[f"Extra fields not in allowlist: {', '.join(sorted(extra_fields))}. Allowed: {', '.join(sorted(allowed_fields))}"],
         )
     return SafetyResult(safe=True, injection_score=None)
 
@@ -140,26 +140,27 @@ def check_reference_integrity(data: dict) -> SafetyResult:
         if npc.get("faction"):
             referenced_ids.add(npc["faction"])
     for rumor in data.get("rumors", []):
-        if rumor.get("related_location"):
-            referenced_ids.add(rumor["related_location"])
-        if rumor.get("related_npc"):
-            referenced_ids.add(rumor["related_npc"])
+        if rumor.get("relatedLocation"):
+            referenced_ids.add(rumor["relatedLocation"])
+        if rumor.get("relatedNpc"):
+            referenced_ids.add(rumor["relatedNpc"])
     for event in data.get("events", []):
         all_ids.add(event.get("id", ""))
-        referenced_ids.add(event.get("location_id", ""))
-        for npc_ref in event.get("related_npc_ids", []):
+        if event.get("locationId"):
+            referenced_ids.add(event["locationId"])
+        for npc_ref in event.get("relatedNpcIds", []):
             referenced_ids.add(npc_ref)
-    for ending in data.get("ending_candidates", []):
+    for ending in data.get("endingCandidates", []):
         all_ids.add(ending.get("id", ""))
-        if ending.get("required_realm") and ending["required_realm"] not in valid_realm_ids:
-            errors.append(f"requiredRealm '{ending['required_realm']}' is not a valid realm ID")
+        if ending.get("requiredRealm") and ending["requiredRealm"] not in valid_realm_ids:
+            errors.append(f"requiredRealm '{ending['requiredRealm']}' is not a valid realm ID")
 
     invalid_refs = referenced_ids - all_ids - {""}
     if invalid_refs:
-        errors.append(f"Referenced IDs not found in world data (warning): {', '.join(sorted(invalid_refs))}")
+        errors.append(f"Referenced IDs not found in world data: {', '.join(sorted(invalid_refs))}")
 
     if errors:
-        return SafetyResult(safe=True, injection_score=None, errors=errors)
+        return SafetyResult(safe=False, injection_score=None, errors=errors)
 
     return SafetyResult(safe=True, injection_score=None)
 
@@ -171,9 +172,9 @@ def check_size_limit(data: dict, max_size_kb: int = DEFAULT_SIZE_LIMIT_KB) -> Sa
 
     if size_bytes > max_bytes:
         return SafetyResult(
-            safe=True,
+            safe=False,
             injection_score=None,
-            errors=[f"JSON output exceeds size limit (warning): {size_bytes} bytes > {max_bytes} bytes ({max_size_kb}KB)"],
+            errors=[f"JSON output exceeds size limit: {size_bytes} bytes > {max_bytes} bytes ({max_size_kb}KB)"],
         )
 
     return SafetyResult(safe=True, injection_score=None)

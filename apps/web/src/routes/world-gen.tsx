@@ -119,7 +119,7 @@ function WorldGenPage() {
               </Button>
               <Button variant="secondary" size="lg" className="gap-2"
                 onClick={() => setPref({ direction: DIRECTIONS[Math.floor(Math.random()*DIRECTIONS.length)], mode: MODES[Math.floor(Math.random()*MODES.length)], seed: Math.floor(Math.random()*1000000) })}>
-                <Dice5 className="w-5 h-5" /> 机机配置
+                <Dice5 className="w-5 h-5" /> 随机配置
               </Button>
             </div>
           </motion.div>

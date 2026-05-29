@@ -22,3 +22,11 @@ export const REALM_NAMES_ORDERED: RealmName[] = Object.keys(REALM_ORDER) as Real
 export function realmOrder(realm: RealmName): number {
   return REALM_ORDER[realm] ?? -1;
 }
+
+export function requireRealmOrder(realm: string): number {
+  const order = REALM_ORDER[realm as RealmName];
+  if (order === undefined) {
+    throw new Error(`Invalid realm: "${realm}". Valid realms: ${Object.keys(REALM_ORDER).join(', ')}`);
+  }
+  return order;
+}

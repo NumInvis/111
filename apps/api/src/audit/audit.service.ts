@@ -102,8 +102,9 @@ export class AuditService {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.error(`Failed to persist state change: ${message}`);
+      throw error;
     }
-    this.logger.log(`State change in session ${sessionId}: ${changeType} �?${JSON.stringify(details)}`);
+    this.logger.log(`State change in session ${sessionId}: ${changeType} - ${JSON.stringify(details)}`);
   }
 
   async getLlmCalls(sessionId: string) {

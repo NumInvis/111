@@ -3,6 +3,7 @@ from __future__ import annotations
 from pydantic_ai import Agent
 
 from app.dependencies import Settings
+from app.safety.pipeline import check_input_safety
 from app.schemas.models import NpcDialogueOutput, NpcDialogueRequest
 
 NPC_DIALOGUE_PROMPT = """You are an NPC in the 变分无限 (Variational Infinity) world — a math-xianxia life-simulator where cultivation is the pursuit of mathematical truth.
@@ -60,6 +61,12 @@ async def generate_npc_dialogue(request: NpcDialogueRequest, settings: Settings)
 
     ctx = request.npc_context or {}
 
+    for key, val in ctx.items():
+        if isinstance(val, str):
+            result = check_input_safety(val)
+            if not result.safe:
+                raise ValueError(f"NPC context field '{key}' failed safety check: {result.errors}")
+
     system_prompt = NPC_DIALOGUE_PROMPT.format(
         npc_name=ctx.get("name", "Unknown NPC"),
         npc_role=ctx.get("role", "unknown"),
@@ -68,7 +75,7 @@ async def generate_npc_dialogue(request: NpcDialogueRequest, settings: Settings)
         npc_secret=ctx.get("secret", "unknown"),
         npc_forbidden_topics=", ".join(ctx.get("forbidden_topics", [])),
         npc_dialogue_style=ctx.get("dialogue_style", "neutral"),
-        npc_realm=ctx.get("cultivation_level", "unknown"),
+        npc_realm=ctx.get("cultivationLevel", ctx.get("cultivation_level", "unknown")),
         npc_trust=str(ctx.get("trust_level", 0.3)),
         npc_math_strength=ctx.get("mathematical_strength", "unknown"),
     )

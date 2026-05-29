@@ -5,6 +5,7 @@ import { Tag } from '@/components/ui/Tag'
 import { motion } from 'framer-motion'
 import { RotateCcw, Clock, MapPin, Scroll, Users, Skull } from 'lucide-react'
 import { useGameStore } from '@/stores/gameStore'
+import { ATTRIBUTE_LABELS } from '@/types'
 
 export const Route = createFileRoute('/death')({
   component: DeathPage,
@@ -53,7 +54,7 @@ function DeathPage() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {Object.entries(player.attributes).map(([key, val]) => (
                   <div key={key} className="bg-bg-card border-2 border-border-primary p-2 text-center">
-                    <div className="font-mono text-xs text-text-secondary">{key === 'physique' ? '体魄' : key === 'family' ? '家世' : key}</div>
+                    <div className="font-mono text-xs text-text-secondary">{ATTRIBUTE_LABELS[key as keyof typeof ATTRIBUTE_LABELS] ?? key}</div>
                     <div className="font-mono text-base font-bold">{val}</div>
                   </div>
                 ))}

@@ -22,7 +22,7 @@ async def generate_world_blueprint(preferences: GenerationPreferences):
 
     WORLD_BLUEPRINT_ALLOWED_FIELDS = {
         "worldProfile", "factions", "locations", "npcs", "rumors",
-        "clues", "events", "endingCandidates", "stateModel",
+        "clues", "events", "endingCandidates", "stateModel", "powerSystem",
     }
 
     output_safety = full_output_check(blueprint.model_dump(by_alias=True), WORLD_BLUEPRINT_ALLOWED_FIELDS)

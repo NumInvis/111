@@ -174,7 +174,13 @@ Events blend mathematical challenges with cultivation life:
 Return JSON:
 {
   "id": "unique event id",
-  "triggerCondition": "description of when this triggers",
+  "triggerCondition": {
+    "minRealm": "optional minimum realm name (e.g. 练气)",
+    "minAge": optional_minimum_age_number,
+    "locationId": "optional location id where this triggers",
+    "discoveredNpcId": "optional npc id that must be discovered",
+    "discoveredClueId": "optional clue id that must be discovered"
+  },
   "locationId": "{{playerLocation}}",
   "description": "rich narrative description of the event scenario",
   "options": [

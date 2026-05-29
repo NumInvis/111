@@ -565,7 +565,7 @@ export function applyEventChoiceAction(
   }
 
   const eventClues = worldBlueprint.clues.filter(
-    (c) => c.relatedEndingIds?.includes(eventChoice.eventId) && !currentState.discoveredClues.includes(c.id),
+    (c) => c.locationId === event.locationId && !currentState.discoveredClues.includes(c.id),
   );
 
   const discoveredClues = eventClues.length > 0
@@ -713,6 +713,10 @@ export function applyAttemptBreakthroughAction(
 
   const currentIdx = realmOrder(currentState.realm);
   const nextRealm = REALM_NAMES_ORDERED[currentIdx + 1];
+
+  if (!nextRealm) {
+    throw new Error(`Cannot advance beyond the highest realm "${currentState.realm}".`);
+  }
 
   if (result.allowed) {
     const thresholds = REALM_ADVANCEMENT_THRESHOLDS[nextRealm];

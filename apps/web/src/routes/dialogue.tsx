@@ -87,21 +87,23 @@ function DialoguePage() {
 
       if (reply.trustChange !== 0) {
         setAccumulatedTrustChange((prev) => prev + reply.trustChange)
-        const currentRel = player.relationships[activeNpc.id]
-        if (currentRel) {
-          const currentTrust = currentRel.trust
-          const newTrust = Math.max(0, Math.min(1, currentTrust + reply.trustChange))
-          useGameStore.getState().setPlayer({
-            ...player,
-            relationships: {
-              ...player.relationships,
-              [activeNpc.id]: {
-                ...player.relationships[activeNpc.id],
-                trust: newTrust,
-                lastInteractionTurn: player.age,
+        const latestPlayer = useGameStore.getState().player
+        if (latestPlayer) {
+          const currentRel = latestPlayer.relationships[activeNpc.id]
+          if (currentRel) {
+            const newTrust = Math.max(0, Math.min(1, currentRel.trust + reply.trustChange))
+            useGameStore.getState().setPlayer({
+              ...latestPlayer,
+              relationships: {
+                ...latestPlayer.relationships,
+                [activeNpc.id]: {
+                  ...latestPlayer.relationships[activeNpc.id],
+                  trust: newTrust,
+                  lastInteractionTurn: latestPlayer.age,
+                },
               },
-            },
-          } as import('@/types').PlayerState)
+            } as import('@/types').PlayerState)
+          }
         }
       }
     } catch (err) {

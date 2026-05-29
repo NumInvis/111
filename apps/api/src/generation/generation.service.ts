@@ -3,7 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { LlmService } from '../llm/llm.service';
 import { SafetyService } from '../safety/safety.service';
 import { AuditService } from '../audit/audit.service';
-import { PromptRegistry } from '@variational-infinity/ai';
+import { PromptRegistryService } from '../llm/prompt-registry.service';
 import { z } from 'zod';
 import { WorldBlueprintSchema, PlayerStateSchema } from '@variational-infinity/shared';
 import type { WorldBlueprint, PlayerState, GenerationPreferences } from '@variational-infinity/shared';
@@ -11,13 +11,13 @@ import type { WorldBlueprint, PlayerState, GenerationPreferences } from '@variat
 @Injectable()
 export class GenerationService {
   private readonly logger = new Logger(GenerationService.name);
-  private readonly promptRegistry = new PromptRegistry();
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly llmService: LlmService,
     private readonly safetyService: SafetyService,
     private readonly auditService: AuditService,
+    private readonly promptRegistry: PromptRegistryService,
   ) {}
 
   async generateWorld(sessionId: string, preferences: GenerationPreferences): Promise<WorldBlueprint> {

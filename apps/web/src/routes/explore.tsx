@@ -11,9 +11,11 @@ import { ArrowLeft, Scroll, Calendar, MapPin, Loader2, Zap } from 'lucide-react'
 import { useGameStore } from '@/stores/gameStore'
 import { nextYear, applyAction, checkEndings } from '@/lib/api'
 import type { PlayerState, TriggerCondition } from '@/types'
+import { REALMS } from '@/types'
 
 function evaluateTrigger(condition: TriggerCondition, player: PlayerState): boolean {
   if (condition.minAge !== undefined && player.age < condition.minAge) return false
+  if (condition.minRealm && REALMS.indexOf(player.realm as any) < REALMS.indexOf(condition.minRealm as any)) return false
   if (condition.discoveredNpcId && !player.discoveredNpcs.includes(condition.discoveredNpcId)) return false
   if (condition.discoveredClueId && !player.discoveredClues.includes(condition.discoveredClueId)) return false
   if (condition.locationId && player.currentLocationId !== condition.locationId) return false
