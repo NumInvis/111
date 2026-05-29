@@ -10,7 +10,7 @@
   },
   "scripts": {
     "dev:api": "pnpm --filter @variational-infinity/api dev",
-    "dev:web": "pnpm --filter @variational-infinity/web dev",
+    "dev:web": "pnpm --filter @mythweaver/web dev",
     "dev:agent": "cd apps/agent-service && uv run uvicorn app.main:app --reload --port 8000",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",

@@ -4,6 +4,23 @@ export const REALMS = [
 ] as const
 export type Realm = (typeof REALMS)[number]
 
+export const REALM_MATH_LEVELS: Record<string, string> = {
+  '炼体': '幼儿园',
+  '练气': '小学1-2年级',
+  '筑基': '小学3-4年级',
+  '本元': '小学5-6年级',
+  '通明': '初一初二',
+  '化神': '初三',
+  '归一': '高一高二',
+  '渡劫': '高三',
+  '天门': '高考/大学入学',
+  '仙境': '大学低年级',
+  '圣境': '大学高年级',
+  '变分境': '研究生',
+  '天道境': '数学系博士',
+  '无限': '超越',
+}
+
 export const RISK_LEVELS = ['low','medium','high','extreme'] as const
 export type RiskLevel = (typeof RISK_LEVELS)[number]
 
@@ -13,24 +30,28 @@ export type EventType = (typeof EVENT_TYPES)[number]
 export const JOURNAL_CATEGORIES = ['event','discovery','relationship','realm','ending'] as const
 export type JournalCategory = (typeof JOURNAL_CATEGORIES)[number]
 
-export const ATTRIBUTE_KEYS = ['calculation','geometry','abstraction','proof','intuition','focus','physique','family'] as const
-export type AttributeKey = (typeof ATTRIBUTE_KEYS)[number]
-
-export const ATTRIBUTE_LABELS: Record<AttributeKey, string> = {
-  calculation: '演算',
-  geometry: '几何',
-  abstraction: '抽象',
-  proof: '证明',
-  intuition: '直觉',
-  focus: '专注',
-  physique: '体魄',
-  family: '家世',
+export interface AttributeDef {
+  name: string
+  description: string
+  growthPerYear: number
 }
 
-export interface WorldPreference {
-  direction: string
-  mode: string
-  seed?: number
+export interface RealmAdvancementRule {
+  fromRealm: string
+  toRealm: string
+  requiredAttributes: Record<string, number>
+  primaryAttribute: string
+  breakthroughCost: number
+  lifespanExtension: number
+  failureLifespanLoss: number
+}
+
+export interface StartingState {
+  name: string
+  age: number
+  lifespan: number
+  realm: string
+  attributes: Record<string, number>
 }
 
 export interface PowerSystem {
@@ -50,7 +71,7 @@ export interface PowerSystem {
     name: string
     realm: string
     legend: string
-    mathematicalContribution?: string
+    legacy?: string
   }>
 }
 
@@ -68,7 +89,7 @@ export interface Faction {
   name: string
   goal: string
   conflict: string
-  mathematicalDoctrine?: string
+  philosophy?: string
 }
 
 export interface Location {
@@ -92,7 +113,7 @@ export interface NpcSeed {
   forbiddenTopics: string[]
   dialogueStyle: string
   cultivationLevel?: string
-  mathematicalStrength?: string
+  specialty?: string
   trustLevel: number
 }
 
@@ -127,7 +148,7 @@ export interface EventOption {
   description: string
   riskLevel?: RiskLevel
   consequenceHint: string
-  attributeEffects?: Partial<Record<AttributeKey, number>>
+  attributeEffects?: Record<string, number>
   requiresRealm?: string
 }
 
@@ -152,6 +173,9 @@ export interface EndingCandidate {
 
 export interface WorldBlueprint {
   worldProfile: WorldProfile
+  attributeDefs: AttributeDef[]
+  advancementRules: RealmAdvancementRule[]
+  startingState: StartingState
   factions: Faction[]
   locations: Location[]
   npcs: NpcSeed[]
@@ -159,19 +183,9 @@ export interface WorldBlueprint {
   rumors: Rumor[]
   events: EventSeed[]
   endingCandidates: EndingCandidate[]
-  stateModel?: Record<string, [number, number]>
 }
 
-export interface Attribute {
-  calculation: number
-  geometry: number
-  abstraction: number
-  proof: number
-  intuition: number
-  focus: number
-  physique: number
-  family: number
-}
+export type Attribute = Record<string, number>
 
 export type FriendshipLevel = 'stranger' | 'acquaintance' | 'friend' | 'confidant' | 'rival' | 'enemy'
 
@@ -246,18 +260,4 @@ export interface StateUpdate {
   }>
   relationships: Record<string, RelationshipState>
   hints?: string[]
-}
-
-export const GenerationScaleEnum = ['small', 'medium', 'large'] as const
-export type GenerationScale = typeof GenerationScaleEnum[number]
-
-export const GenerationModeEnum = ['quick', 'complete', 'infinite'] as const
-export type GenerationMode = typeof GenerationModeEnum[number]
-
-export interface GenerationPreferences {
-  theme: string
-  scale: GenerationScale
-  tone: string
-  seed?: number
-  mode: GenerationMode
 }

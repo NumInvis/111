@@ -6,7 +6,7 @@ import { AuditService } from '../audit/audit.service';
 import { PromptRegistryService } from '../llm/prompt-registry.service';
 import { z } from 'zod';
 import { WorldBlueprintSchema, PlayerStateSchema } from '@variational-infinity/shared';
-import type { WorldBlueprint, PlayerState, GenerationPreferences } from '@variational-infinity/shared';
+import type { WorldBlueprint, PlayerState } from '@variational-infinity/shared';
 
 @Injectable()
 export class GenerationService {
@@ -20,16 +20,10 @@ export class GenerationService {
     private readonly promptRegistry: PromptRegistryService,
   ) {}
 
-  async generateWorld(sessionId: string, preferences: GenerationPreferences): Promise<WorldBlueprint> {
-    this.logger.log(`Generating world for session ${sessionId} with preferences: ${JSON.stringify(preferences)}`);
+  async generateWorld(sessionId: string): Promise<WorldBlueprint> {
+    this.logger.log(`Generating world for session ${sessionId} — zero-param, AI decides everything`);
 
-    const prompt = this.promptRegistry.render('world_generation', {
-      theme: preferences.theme,
-      scale: preferences.scale,
-      tone: preferences.tone,
-      seed: String(preferences.seed ?? 0),
-      mode: preferences.mode,
-    });
+    const prompt = this.promptRegistry.render('world_generation', {});
 
     const inputSafetyResult = this.safetyService.checkInput(prompt);
     if (!inputSafetyResult.safe) {
@@ -50,7 +44,6 @@ export class GenerationService {
         sessionId,
         agentType: 'world_gen',
         promptName: 'world_generation',
-        seed: preferences.seed,
         temperature: 0.7,
       },
     );
@@ -77,28 +70,21 @@ export class GenerationService {
 
     try {
       const initialLocationId = data.locations[0]?.id ?? 'unknown';
+      const startingState = data.startingState;
+
       const defaultPlayerState: PlayerState = {
-        name: '行者',
-        age: 16,
-        lifespan: 80,
-        realm: '炼体',
+        name: startingState.name,
+        age: startingState.age,
+        lifespan: startingState.lifespan,
+        realm: startingState.realm as PlayerState['realm'],
         currentLocationId: initialLocationId,
-        attributes: {
-          calculation: 10,
-          geometry: 5,
-          abstraction: 5,
-          proof: 3,
-          intuition: 5,
-          focus: 10,
-          physique: 20,
-          family: 10,
-        },
+        attributes: startingState.attributes,
         discoveredLocations: [initialLocationId],
         discoveredNpcs: [],
         discoveredClues: [],
         discoveredRumors: [],
         relationships: {},
-        historySummary: '初入灵墟，一切从零开始。',
+        historySummary: `初入${data.worldProfile.name}，一切从零开始。`,
       };
 
       PlayerStateSchema.parse(defaultPlayerState);
@@ -111,7 +97,7 @@ export class GenerationService {
             promptVersion: promptEntry.version,
             model: result.model,
             provider: result.provider,
-            seed: preferences.seed ?? 0,
+            seed: 0,
             data: data as object,
           },
         }),

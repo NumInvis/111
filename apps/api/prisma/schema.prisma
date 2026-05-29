@@ -52,6 +52,7 @@ model GameState {
   id        String   @id @default(uuid())
   sessionId String
   turn      Int      @default(0)
+  phase     String   @default("initializing")
   data      Json
   createdAt DateTime @default(now())
 

@@ -51,10 +51,10 @@ export class GameController {
   }
 
   @Get('sessions/:id/state')
-  async getState(@Param('id') id: string): Promise<ApiResponse<PlayerState>> {
+  async getState(@Param('id') id: string): Promise<ApiResponse<PlayerState & { phase: string }>> {
     try {
-      const state = await this.gameService.getState(id);
-      return { success: true, data: state };
+      const { playerState, phase } = await this.gameService.loadPlayerStateInternal(id);
+      return { success: true, data: { ...playerState, phase } };
     } catch {
       throw new NotFoundException(`No game state for session "${id}"`);
     }

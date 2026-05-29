@@ -6,31 +6,15 @@ import type {
   Attribute,
   Clue,
   TriggerCondition,
+  RealmAdvancementRule,
 } from '@variational-infinity/shared';
-import { realmOrder, requireRealmOrder, REALM_ORDER, REALM_NAMES_ORDERED } from '../constants/realm-constants';
+import { realmOrder, requireRealmOrder, REALM_NAMES_ORDERED } from '../constants/realm-constants';
 import type { RealmName } from '@variational-infinity/shared';
 
 export interface RuleCheckResult {
   allowed: boolean;
   reason?: string;
 }
-
-const REALM_ADVANCEMENT_THRESHOLDS: Record<string, Partial<Attribute>> = {
-  '炼体': {},
-  '练气': { calculation: 10, focus: 10, physique: 10 },
-  '筑基': { calculation: 20, geometry: 10, focus: 15, physique: 15, family: 8 },
-  '本元': { calculation: 30, geometry: 20, abstraction: 15, focus: 20 },
-  '通明': { calculation: 40, geometry: 30, abstraction: 25, proof: 15, intuition: 10 },
-  '化神': { calculation: 50, geometry: 40, abstraction: 35, proof: 25, intuition: 20, focus: 30 },
-  '归一': { calculation: 60, geometry: 50, abstraction: 45, proof: 35, intuition: 30, focus: 40 },
-  '渡劫': { calculation: 70, geometry: 60, abstraction: 55, proof: 45, intuition: 40, focus: 50, physique: 40 },
-  '天门': { calculation: 80, geometry: 70, abstraction: 65, proof: 55, intuition: 50, focus: 60, physique: 50 },
-  '仙境': { calculation: 85, geometry: 75, abstraction: 70, proof: 60, intuition: 55, focus: 65, physique: 55 },
-  '圣境': { calculation: 90, geometry: 80, abstraction: 75, proof: 65, intuition: 60, focus: 70, physique: 60 },
-  '变分境': { calculation: 95, geometry: 85, abstraction: 80, proof: 70, intuition: 65, focus: 75 },
-  '天道境': { calculation: 98, geometry: 90, abstraction: 85, proof: 75, intuition: 70, focus: 80 },
-  '无限': { calculation: 100, geometry: 100, abstraction: 100, proof: 100, intuition: 100, focus: 100 },
-};
 
 export class EndingArbitrator {
   checkEndingCandidate(
@@ -222,9 +206,19 @@ export class StateBoundsChecker {
   }
 }
 
-
-
 export class RealmAdvancementChecker {
+  private advancementRules: RealmAdvancementRule[];
+
+  constructor(advancementRules: RealmAdvancementRule[]) {
+    this.advancementRules = advancementRules;
+  }
+
+  private findRule(fromRealm: string, toRealm: string): RealmAdvancementRule | undefined {
+    return this.advancementRules.find(
+      (r) => r.fromRealm === fromRealm && r.toRealm === toRealm,
+    );
+  }
+
   checkRealmAdvancement(
     currentRealm: RealmName,
     attributes: Attribute,
@@ -240,20 +234,20 @@ export class RealmAdvancementChecker {
     }
 
     const nextRealm = REALM_NAMES_ORDERED[nextIdx];
-    const thresholds = REALM_ADVANCEMENT_THRESHOLDS[nextRealm];
+    const rule = this.findRule(currentRealm, nextRealm);
 
-    if (!thresholds) {
+    if (!rule) {
       return {
         allowed: false,
-        reason: `No advancement thresholds defined for realm "${nextRealm}".`,
+        reason: `No advancement rule defined from "${currentRealm}" to "${nextRealm}".`,
       };
     }
 
     const failedAttributes: string[] = [];
-    for (const [attrName, minRequired] of Object.entries(thresholds)) {
-      const current = attributes[attrName as keyof Attribute];
-      if (current < minRequired) {
-        failedAttributes.push(`${attrName}: ${current}/${minRequired}`);
+    for (const [attrName, minRequired] of Object.entries(rule.requiredAttributes)) {
+      const current = attributes[attrName];
+      if (current === undefined || current < minRequired) {
+        failedAttributes.push(`${attrName}: ${current ?? 0}/${minRequired}`);
       }
     }
 
@@ -268,6 +262,14 @@ export class RealmAdvancementChecker {
       allowed: true,
       reason: `Eligible to advance from "${currentRealm}" to "${nextRealm}". All attribute thresholds met.`,
     };
+  }
+
+  getAdvancementRule(currentRealm: RealmName): RealmAdvancementRule | undefined {
+    const currentIdx = realmOrder(currentRealm);
+    const nextIdx = currentIdx + 1;
+    if (nextIdx >= REALM_NAMES_ORDERED.length) return undefined;
+    const nextRealm = REALM_NAMES_ORDERED[nextIdx];
+    return this.findRule(currentRealm, nextRealm);
   }
 }
 
@@ -287,4 +289,4 @@ export function evaluateTriggerCondition(
   return true;
 }
 
-export { REALM_ADVANCEMENT_THRESHOLDS, REALM_NAMES_ORDERED };
+export { REALM_NAMES_ORDERED };

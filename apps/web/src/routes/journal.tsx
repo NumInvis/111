@@ -7,7 +7,6 @@ import { ProgressBar } from '@/components/ui/ProgressBar'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Clock, Sparkles, BookOpen, MapPin, Shield } from 'lucide-react'
 import { useGameStore } from '@/stores/gameStore'
-import { ATTRIBUTE_LABELS } from '@/types'
 import type { JournalCategory } from '@/types'
 
 export const Route = createFileRoute('/journal')({
@@ -121,12 +120,12 @@ function JournalPage() {
               {player && (
                 <Panel title="属性概览" titleBg="cyan">
                   <div className="grid grid-cols-4 gap-2">
-                    {(Object.entries(ATTRIBUTE_LABELS) as [keyof typeof ATTRIBUTE_LABELS, string][]).map(([key, label]) => (
+                    {(Object.entries(player.attributes) as [string, number][]).map(([key, value]) => (
                       <div key={key} className="bg-bg-paper border-2 border-border-primary p-2 text-center">
-                        <div className="font-mono text-xs text-text-secondary mb-1">{label}</div>
+                        <div className="font-mono text-xs text-text-secondary mb-1">{key}</div>
                         <div className={`font-mono text-lg font-bold ${
-                          player.attributes[key] > 70 ? 'text-accent-green' : player.attributes[key] > 40 ? 'text-primary' : 'text-accent-red'
-                        }`}>{player.attributes[key]}</div>
+                          value > 70 ? 'text-accent-green' : value > 40 ? 'text-primary' : 'text-accent-red'
+                        }`}>{value}</div>
                       </div>
                     ))}
                   </div>

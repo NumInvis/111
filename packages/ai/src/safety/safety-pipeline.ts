@@ -132,8 +132,8 @@ export class FieldAllowlistPipeline {
 
     if (extraFields.length > 0) {
       return {
-        safe: true,
-        severity: 'warning',
+        safe: false,
+        severity: 'blocker',
         errors: [`Extra fields not in allowlist: ${extraFields.join(', ')}. Allowed: ${allowlist.join(', ')}`],
       };
     }
@@ -213,8 +213,8 @@ export class ReferenceIntegrityPipeline {
 
     if (errors.length > 0) {
       return {
-        safe: true,
-        severity: 'warning',
+        safe: false,
+        severity: 'blocker',
         errors,
       };
     }
@@ -237,7 +237,7 @@ export class SizeLimitPipeline {
     if (sizeBytes > this.maxSizeBytes) {
       return {
         safe: false,
-        severity: 'warning',
+        severity: 'blocker',
         errors: [`JSON output exceeds size limit: ${sizeBytes} bytes > ${this.maxSizeBytes} bytes (${(this.maxSizeBytes / 1024).toFixed(0)}KB)`],
       };
     }

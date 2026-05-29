@@ -1,17 +1,34 @@
 import { z } from 'zod';
 
-export const AttributeNameEnum = z.enum([
-  'calculation',
-  'geometry',
-  'abstraction',
-  'proof',
-  'intuition',
-  'focus',
-  'physique',
-  'family',
-]);
+export const AttributeDefSchema = z.object({
+  name: z.string().describe('Unique attribute name (e.g., "体魄", "算力", "悟性")'),
+  description: z.string().describe('Brief description of what this attribute represents'),
+  growthPerYear: z.number().min(0).max(10).describe('Base annual growth rate for this attribute'),
+});
 
-export type AttributeName = z.infer<typeof AttributeNameEnum>;
+export type AttributeDef = z.infer<typeof AttributeDefSchema>;
+
+export const RealmAdvancementRuleSchema = z.object({
+  fromRealm: z.string().describe('Source realm name'),
+  toRealm: z.string().describe('Target realm name'),
+  requiredAttributes: z.record(z.string(), z.number().min(0).max(100)).describe('Minimum attribute values required (attribute name → min value)'),
+  primaryAttribute: z.string().describe('The attribute consumed during breakthrough attempt'),
+  breakthroughCost: z.number().min(0).max(50).describe('Amount of primary attribute consumed on successful breakthrough'),
+  lifespanExtension: z.number().min(0).max(50).describe('Lifespan years gained on successful breakthrough'),
+  failureLifespanLoss: z.number().min(0).max(10).default(2).describe('Lifespan years lost on failed breakthrough attempt'),
+});
+
+export type RealmAdvancementRule = z.infer<typeof RealmAdvancementRuleSchema>;
+
+export const StartingStateSchema = z.object({
+  name: z.string().describe('Player character starting name'),
+  age: z.number().min(10).max(30).describe('Starting age'),
+  lifespan: z.number().min(50).max(120).describe('Starting maximum lifespan'),
+  realm: z.string().describe('Starting realm name'),
+  attributes: z.record(z.string(), z.number().min(0).max(100)).describe('Starting attribute values (attribute name → value)'),
+});
+
+export type StartingState = z.infer<typeof StartingStateSchema>;
 
 export const CultivationPathSchema = z.object({
   id: z.string().describe('Unique identifier for the cultivation path'),
@@ -35,7 +52,7 @@ export const LegendaryFigureSchema = z.object({
   name: z.string().describe('Display name of the legendary figure'),
   realm: z.string().describe('The cultivation realm this figure has achieved'),
   legend: z.string().describe('Brief legend or story associated with this figure'),
-  mathematicalContribution: z.string().optional().describe('Optional mathematical contribution this figure is known for'),
+  legacy: z.string().optional().describe('Optional lasting contribution this figure is known for'),
 });
 
 export type LegendaryFigure = z.infer<typeof LegendaryFigureSchema>;
@@ -64,7 +81,7 @@ export const FactionSchema = z.object({
   name: z.string().describe('Display name of the faction'),
   goal: z.string().describe('The faction\'s primary objective or motivation'),
   conflict: z.string().describe('What this faction is in conflict over or against'),
-  mathematicalDoctrine: z.string().optional().describe('Optional mathematical philosophy or doctrine the faction follows'),
+  philosophy: z.string().optional().describe('Optional philosophical doctrine the faction follows'),
 });
 
 export type Faction = z.infer<typeof FactionSchema>;
@@ -96,7 +113,7 @@ export const NpcSeedSchema = z.object({
   forbiddenTopics: z.array(z.string()).describe('Topics the NPC refuses to discuss or reacts negatively to'),
   dialogueStyle: z.string().describe('Description of the NPC\'s speech pattern and conversational style'),
   cultivationLevel: z.string().optional().describe('Optional cultivation realm name the NPC has achieved'),
-  mathematicalStrength: z.string().optional().describe('Optional mathematical domain the NPC excels in'),
+  specialty: z.string().optional().describe('Optional domain the NPC excels in'),
   trustLevel: z.number().min(0).max(1).default(0.3).describe('Initial trust level toward the player (0-1, default 0.3)'),
 });
 
@@ -127,7 +144,7 @@ export const EventOptionSchema = z.object({
   description: z.string().describe('Detailed description of what this choice entails'),
   riskLevel: RiskLevelEnum.optional().describe('Optional risk level associated with choosing this option'),
   consequenceHint: z.string().describe('Brief hint about potential consequences of this choice'),
-  attributeEffects: z.record(AttributeNameEnum, z.number().min(-15).max(15)).optional().describe('Optional attribute name to numeric effect mapping (-15 to +15)'),
+  attributeEffects: z.record(z.string(), z.number().min(-15).max(15)).optional().describe('Optional attribute name to numeric effect mapping (-15 to +15)'),
   requiresRealm: z.string().optional().describe('Optional realm ID required to be eligible for this option'),
 });
 
@@ -210,14 +227,16 @@ export type RealmMap = z.infer<typeof RealmMapSchema>;
 
 export const WorldBlueprintSchema = z.object({
   worldProfile: WorldProfileSchema.describe('Core world profile defining the narrative setting'),
+  attributeDefs: z.array(AttributeDefSchema).min(3).max(12).describe('AI-generated attribute definitions (3-12 attributes)'),
+  advancementRules: z.array(RealmAdvancementRuleSchema).min(1).describe('AI-generated realm advancement rules'),
+  startingState: StartingStateSchema.describe('AI-generated starting player state'),
   factions: z.array(FactionSchema).min(2).max(5).describe('Factions in this world (2-5)'),
   locations: z.array(LocationSchema).min(3).max(7).describe('Explorable locations in this world (3-7)'),
   npcs: z.array(NpcSeedSchema).min(3).max(7).describe('NPCs populating this world (3-7)'),
-  clues: z.array(ClueSchema).min(3).max(15).describe('Clues/evidence discoverable in this world (3-15)'),
-  rumors: z.array(RumorSchema).min(2).max(10).describe('Rumors circulating in this world (2-10)'),
-  events: z.array(EventSeedSchema).min(3).max(8).describe('Event seeds that may trigger during play (3-8)'),
+  clues: z.array(ClueSchema).min(2).max(15).describe('Clues/evidence discoverable in this world (2-15)'),
+  rumors: z.array(RumorSchema).min(1).max(10).describe('Rumors circulating in this world (1-10)'),
+  events: z.array(EventSeedSchema).min(2).max(8).describe('Event seeds that may trigger during play (2-8)'),
   endingCandidates: z.array(EndingCandidateSchema).min(2).max(5).describe('Possible endings the player may reach (2-5)'),
-  stateModel: z.record(z.string(), z.tuple([z.number(), z.number()])).optional().describe('Optional model of state field names to allowed value ranges [min, max]'),
 });
 
 export type WorldBlueprint = z.infer<typeof WorldBlueprintSchema>;

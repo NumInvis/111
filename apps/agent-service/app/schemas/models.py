@@ -34,7 +34,7 @@ class LegendaryFigure(BaseModel):
     id: str = Field(description="Unique identifier for the legendary figure")
     name: str = Field(description="Display name of the legendary figure")
     realm: str = Field(description="The cultivation realm this figure has achieved")
-    mathematical_contribution: str = Field(alias="mathematicalContribution", description="This figure's key mathematical insight or contribution")
+    legacy: Optional[str] = Field(default=None, description="Optional lasting contribution this figure is known for")
     legend: str = Field(description="Brief legend or lore about this figure")
 
 
@@ -64,7 +64,7 @@ class Faction(BaseModel):
     name: str = Field(description="Display name of the faction")
     goal: str = Field(description="The faction's primary objective or motivation")
     conflict: str = Field(description="What this faction is in conflict over or against")
-    mathematical_doctrine: Optional[str] = Field(alias="mathematicalDoctrine", default=None, description="Optional mathematical philosophy or doctrine the faction follows")
+    philosophy: Optional[str] = Field(default=None, description="Optional philosophical doctrine the faction follows")
 
 
 class Location(BaseModel):
@@ -92,7 +92,7 @@ class NpcSeed(BaseModel):
     forbidden_topics: list[str] = Field(alias="forbiddenTopics", description="Topics the NPC refuses to discuss or reacts negatively to")
     dialogue_style: str = Field(alias="dialogueStyle", description="Description of the NPC's speech pattern and conversational style")
     cultivation_level: Optional[str] = Field(alias="cultivationLevel", default=None, description="Optional cultivation realm name the NPC has achieved")
-    mathematical_strength: Optional[str] = Field(alias="mathematicalStrength", default=None, description="Optional mathematical domain the NPC excels in")
+    specialty: Optional[str] = Field(default=None, description="Optional domain the NPC excels in")
     trust_level: float = Field(alias="trustLevel", default=0.3, ge=0.0, le=1.0, description="Initial trust level toward the player (0-1, default 0.3)")
 
 
@@ -162,28 +162,50 @@ class EndingCandidate(BaseModel):
     tone: str = Field(description="Narrative tone of the ending (e.g., triumphant, tragic, mysterious)")
 
 
+class AttributeDef(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    name: str = Field(description="Unique attribute name")
+    description: str = Field(description="Brief description of what this attribute represents")
+    growth_per_year: float = Field(alias="growthPerYear", ge=0, le=10, description="Base annual growth rate for this attribute")
+
+
+class RealmAdvancementRule(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    from_realm: str = Field(alias="fromRealm", description="Source realm name")
+    to_realm: str = Field(alias="toRealm", description="Target realm name")
+    required_attributes: dict[str, int] = Field(alias="requiredAttributes", description="Minimum attribute values required")
+    primary_attribute: str = Field(alias="primaryAttribute", description="The attribute consumed during breakthrough attempt")
+    breakthrough_cost: int = Field(alias="breakthroughCost", ge=0, le=50, description="Amount of primary attribute consumed on successful breakthrough")
+    lifespan_extension: int = Field(alias="lifespanExtension", ge=0, le=50, description="Lifespan years gained on successful breakthrough")
+    failure_lifespan_loss: int = Field(alias="failureLifespanLoss", default=2, ge=0, le=10, description="Lifespan years lost on failed breakthrough attempt")
+
+
+class StartingState(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    name: str = Field(description="Player character starting name")
+    age: int = Field(ge=10, le=30, description="Starting age")
+    lifespan: int = Field(ge=50, le=120, description="Starting maximum lifespan")
+    realm: str = Field(description="Starting realm name")
+    attributes: dict[str, int] = Field(description="Starting attribute values")
+
+
 class WorldBlueprint(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
     world_profile: WorldProfile = Field(alias="worldProfile", description="Core world profile defining the narrative setting")
+    attribute_defs: list[AttributeDef] = Field(alias="attributeDefs", min_length=3, max_length=12, description="AI-generated attribute definitions (3-12)")
+    advancement_rules: list[RealmAdvancementRule] = Field(alias="advancementRules", min_length=1, description="AI-generated realm advancement rules")
+    starting_state: StartingState = Field(alias="startingState", description="AI-generated starting player state")
     factions: list[Faction] = Field(min_length=2, max_length=5, description="Factions in this world (2-5)")
     locations: list[Location] = Field(min_length=3, max_length=7, description="Explorable locations in this world (3-7)")
     npcs: list[NpcSeed] = Field(min_length=3, max_length=7, description="NPCs populating this world (3-7)")
-    rumors: list[Rumor] = Field(min_length=2, max_length=10, description="Rumors circulating in this world (2-10)")
-    clues: list[Clue] = Field(default_factory=list, description="Clues/evidence discoverable in this world")
-    events: list[EventSeed] = Field(min_length=3, max_length=8, description="Event seeds that may trigger during play (3-8)")
+    rumors: list[Rumor] = Field(min_length=1, max_length=10, description="Rumors circulating in this world (1-10)")
+    clues: list[Clue] = Field(min_length=2, max_length=15, description="Clues/evidence discoverable in this world (2-15)")
+    events: list[EventSeed] = Field(min_length=2, max_length=8, description="Event seeds that may trigger during play (2-8)")
     ending_candidates: list[EndingCandidate] = Field(alias="endingCandidates", min_length=2, max_length=5, description="Possible endings the player may reach (2-5)")
-    state_model: Optional[dict[str, list[int]]] = Field(alias="stateModel", default=None, description="Optional model of state field names to allowed value ranges [min, max]")
-
-
-class GenerationPreferences(BaseModel):
-    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
-
-    theme: str = Field(description="Theme for world generation")
-    scale: str = Field(description="Scale of world: small, medium, or large")
-    tone: str = Field(description="Tone for world generation")
-    seed: Optional[int] = Field(default=None, description="Optional seed for reproducible generation")
-    mode: str = Field(description="Generation mode: quick, complete, or infinite")
 
 
 class NpcDialogueRequest(BaseModel):

@@ -1,7 +1,6 @@
 import { Controller, Get, Post, Param, Body } from '@nestjs/common';
 import { GenerationService } from './generation.service';
 import type { ApiResponse, WorldBlueprint } from '@variational-infinity/shared';
-import { GenerationPreferencesDto } from '../dto/dto';
 
 @Controller('generation')
 export class GenerationController {
@@ -10,9 +9,9 @@ export class GenerationController {
   @Post('world/:sessionId')
   async generateWorld(
     @Param('sessionId') sessionId: string,
-    @Body() preferences: GenerationPreferencesDto,
+    @Body() _body: Record<string, unknown>,
   ): Promise<ApiResponse<WorldBlueprint>> {
-    const blueprint = await this.generationService.generateWorld(sessionId, preferences);
+    const blueprint = await this.generationService.generateWorld(sessionId);
     return { success: true, data: blueprint };
   }
 

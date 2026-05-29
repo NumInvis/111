@@ -1,6 +1,10 @@
 export {
-  AttributeNameEnum,
-  type AttributeName,
+  AttributeDefSchema,
+  type AttributeDef,
+  RealmAdvancementRuleSchema,
+  type RealmAdvancementRule,
+  StartingStateSchema,
+  type StartingState,
   CultivationPathSchema,
   type CultivationPath,
   CultivationTierSchema,
@@ -66,6 +70,16 @@ export {
   type JournalCategory,
   JournalEntrySchema,
   type JournalEntry,
+  NpcDialogueMetadataSchema,
+  type NpcDialogueMetadata,
+  NpcDialogueOutputSchema,
+  type NpcDialogueOutput,
+  EndingEligibilitySchema,
+  type EndingEligibility,
+  IneligibleEndingSchema,
+  type IneligibleEnding,
+  EndingOutputSchema,
+  type EndingOutput,
 } from './game-state.schema';
 
 export {

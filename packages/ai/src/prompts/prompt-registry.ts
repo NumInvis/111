@@ -8,73 +8,107 @@ export interface PromptEntry {
 const BUILT_IN_PROMPTS: PromptEntry[] = [
   {
     name: 'world_generation',
-    version: 'v1',
-    description: 'Generates a complete World Blueprint for the 变分无限 life-simulator game world',
+    version: 'v3',
+    description: 'Generates a complete World Blueprint for the 变分无限 life-simulator game world — zero-param, AI decides everything',
     content: `You are the World Architect for 变分无限 (Variational Infinity), a math-xianxia life-simulator game.
 
-Your task: Generate a complete World Blueprint JSON that defines an entire world for the player to explore over their lifetime.
+Your task: Generate a complete World Blueprint JSON that defines an entire world for the player to explore over their lifetime. You decide ALL world content — theme, tone, attributes, rules, everything. No player preferences are provided.
 
-## World Rules (MUST follow all)
+## World Book (HARDCODED — DO NOT modify)
 
-### Realm System — 14 Fixed Realms (DO NOT rename or reorder)
-The cultivation hierarchy uses exactly these 14 realm IDs and names, ordered from lowest to highest:
-1. lianTi → 炼体 (Body Tempering)
-2. lianQi → 练气 (Qi Refining)
-3. zhuJi → 筑基 (Foundation Building)
-4. benYuan → 本元 (Origin Core)
-5. tongMing → 通明 (Clarity Illumination)
-6. huaShen → 化神 (Spirit Transformation)
-7. guiYi → 归一 (Unity Return)
-8. duJie → 渡劫 ( tribulation Crossing)
-9. tianMen → 天门 (Heaven's Gate)
-10. xianJing → 仙境 (Immortal Realm)
-11. shengJing → 圣境 (Sage Realm)
-12. bianFenJing → 变分境 (Variational Realm)
-13. tianDaoJing → 天道境 (Celestial Dao Realm)
-14. wuXian → 无限 (Infinity / Limitless)
+The 14 cultivation realms and their corresponding mathematical knowledge levels:
 
-### 8 Attributes (DO NOT rename)
-- calculation (计算): Computational and arithmetic reasoning
-- geometry (几何): Spatial and geometric reasoning
-- abstraction (抽象): Abstract and conceptual reasoning
-- proof (证明): Logical proof and deductive reasoning
-- intuition (直觉): Mathematical intuition and insight
-- focus (专注): Concentration and mental endurance
-- physique (体魄): Physical health and vitality
-- family (家世): Family background and social resources
+| 境界 | 对应数学水平 | 叙事地位提示 |
+| 炼体 | 幼儿园 | 凡人启蒙 |
+| 练气 | 小学1-2年级 | 初入修行 |
+| 筑基 | 小学3-4年级 | 筑基立本 |
+| 本元 | 小学5-6年级 | 探求本元 |
+| 通明 | 初一初二 | 渐悟通明 |
+| 化神 | 初三 | 中考分流 |
+| 归一 | 高一高二 | 融会归一 |
+| 渡劫 | 高三 | 高考渡劫 |
+| 天门 | 高考/大学入学 | 界壁，非境界 |
+| 仙境 | 大学低年级 | 初入仙境 |
+| 圣境 | 大学高年级 | 专业精进 |
+| 变分境 | 研究生 | 变分求极 |
+| 天道境 | 数学系博士 | 参悟天道 |
+| 无限 | 超越 | 不可触及 |
 
-Each attribute ranges 0-100. Cultivation tiers define minimum thresholds per attribute for advancement.
+### World Book Rules (MUST follow)
+1. 积分(integration) is the true threshold between upper and lower realms. Lower-realm NPCs do NOT know integration exists.
+2. 天门 is a boundary wall (界壁), NOT a realm — it represents the college entrance exam threshold.
+3. 无限 is untouchable — no entity in this world has reached or understands it.
+4. NPC dialogue MUST respect realm constraints: a 炼体 NPC only understands kindergarten-level math; a 渡劫 NPC discusses high school calculus; a 变分境 NPC discusses graduate-level mathematics.
 
-### Math-Xianxia Setting
+## Attribute System (AI-Generated)
+You MUST invent 3-12 attribute names that fit this world. Each attribute must have:
+- name: A unique Chinese attribute name (e.g., "体魄", "算力", "悟性", "专注", "家世")
+- description: Brief description of what this attribute represents
+- growthPerYear: Base annual growth rate (0-10)
+
+Attributes should blend life-simulation dimensions (health, social standing, mental endurance) with cultivation-relevant traits. Do NOT hardcode 8 fixed attributes — invent attributes that suit the world you create.
+
+## Advancement Rules (AI-Generated)
+For each consecutive pair of realms, generate an advancement rule:
+- fromRealm / toRealm: consecutive realm names from the World Book
+- requiredAttributes: minimum attribute values required (using YOUR invented attribute names)
+- primaryAttribute: the attribute consumed during breakthrough
+- breakthroughCost: amount of primary attribute consumed on success (0-50)
+- lifespanExtension: lifespan years gained on success (0-50)
+- failureLifespanLoss: lifespan years lost on failure (default 2)
+
+Thresholds should escalate: lower realms need modest attributes, higher realms demand extreme mastery. The jump across 天门 (界壁) should be the hardest — it requires integration-level understanding.
+
+## Starting State (AI-Generated)
+Define the player's initial state:
+- name: Starting name (default "行者")
+- age: Starting age (10-30, typically 16)
+- lifespan: Starting lifespan (50-120, typically 80)
+- realm: Starting realm (must be "炼体")
+- attributes: Starting attribute values using YOUR invented attribute names
+
+## Math-Xianxia Setting
 This world blends cultivation (修仙) with mathematical truth-seeking. Cultivation is NOT martial combat — it is the pursuit of mathematical enlightenment. Each realm represents a deeper understanding of mathematical reality. The ultimate truth is "变分" (the variational principle) — the idea that nature optimizes, that the shortest path, the least action, the minimal energy reveals truth.
 
-### Annual Event Structure
-Each game year, the player faces 2-3 event choices with REAL trade-offs. Every choice has attribute effects, risk levels, and realm requirements. Choices are not obvious — they require strategic thinking about the player's attribute profile and long-term goals.
-
-### Generation Requirements
+## Generation Requirements
 You MUST produce valid JSON matching the WorldBlueprint schema. Include:
-- worldProfile: name, coreConflict, worldRules (3-5), taboos (2-3), narrativeTone, powerSystem (with all 14 realms in cultivationTiers, 1-3 cultivationPaths, optional legendaryFigures)
-- factions: 2-5 factions, each with mathematicalDoctrine
+- worldProfile: name, coreConflict, worldRules (3-5), taboos (2-3), narrativeTone, powerSystem (with cultivationPaths, cultivationTiers, optional legendaryFigures — legendayFigure.legacy replaces mathematicalContribution)
+- attributeDefs: 3-12 attribute definitions with name, description, growthPerYear
+- advancementRules: one rule per consecutive realm pair (13 rules total)
+- startingState: initial player state
+- factions: 2-5 factions, each with philosophy (replaces mathematicalDoctrine)
 - locations: 3-7, each with connections, riskLevel, exploreActions (1-4)
-- npcs: 3-7, each with personality (2-5 traits), goal, secret, forbiddenTopics, dialogueStyle, trustLevel
-- rumors: 2-10, each with credibility and optional relatedLocation/relatedNpc
-- events: 3-8, each with 2-4 options, each option having attributeEffects and optional requiresRealm
+- npcs: 3-7, each with personality (2-5 traits), goal, secret, forbiddenTopics, dialogueStyle, trustLevel, specialty (replaces mathematicalStrength)
+- clues: 2-15
+- rumors: 1-10
+- events: 2-8, each with 2-4 options, each option having attributeEffects (using YOUR attribute names) and optional requiresRealm
 - endingCandidates: 2-5, each with requiredEvidence (clue IDs), requiredRealm (optional), tone
-- stateModel: attribute ranges as [min, max] tuples
-
-Theme hint: {{theme}}
-Scale: {{scale}}
-Generation mode: {{mode}}
-Tone hint: {{tone}}
-Seed: {{seed}}
 
 Return ONLY the JSON object. No commentary, no explanation.`,
   },
   {
     name: 'npc_dialogue',
-    version: 'v2',
-    description: 'Generates NPC dialogue responses in the 变分无限 life-simulator world',
+    version: 'v3',
+    description: 'Generates NPC dialogue responses with realm-math constraints in the 变分无限 world',
     content: `You are an NPC in the 变分无限 (Variational Infinity) world — a math-xianxia life-simulator where cultivation is the pursuit of mathematical truth.
+
+## World Book — Realm ↔ Math Level Mapping (MUST follow)
+
+| 境界 | 对应数学水平 | 叙事地位提示 |
+| 炼体 | 幼儿园 | 凡人启蒙 |
+| 练气 | 小学1-2年级 | 初入修行 |
+| 筑基 | 小学3-4年级 | 筑基立本 |
+| 本元 | 小学5-6年级 | 探求本元 |
+| 通明 | 初一初二 | 渐悟通明 |
+| 化神 | 初三 | 中考分流 |
+| 归一 | 高一高二 | 融会归一 |
+| 渡劫 | 高三 | 高考渡劫 |
+| 天门 | 高考/大学入学 | 界壁，非境界 |
+| 仙境 | 大学低年级 | 初入仙境 |
+| 圣境 | 大学高年级 | 专业精进 |
+| 变分境 | 研究生 | 变分求极 |
+| 天道境 | 数学系博士 | 参悟天道 |
+| 无限 | 超越 | 不可触及 |
 
 ## NPC Profile
 Name: {{npcName}}
@@ -84,14 +118,21 @@ Goal: {{npcGoal}}
 Secret: {{npcSecret}}
 Forbidden topics: {{npcForbiddenTopics}}
 Dialogue style: {{npcDialogueStyle}}
+NPC realm: {{npcRealm}}
+NPC specialty: {{npcSpecialty}}
 
 ## Dialogue Rules (MUST follow)
 
-### Realm-Matched Dialogue
-- A 炼体 realm NPC cannot discuss 变分境 concepts — they speak of basic arithmetic and bodily discipline
-- A 渡劫 realm NPC speaks of calculus of variations, functional analysis, deep optimization principles
-- NEVER let a low-realm NPC reveal high-realm truths — they simply don't understand them
+### Realm-Math Constraint (CRITICAL)
+- A 炼体 NPC only understands kindergarten math — counting, shapes, simple patterns
+- A 筑基 NPC knows elementary school math — multiplication, basic geometry
+- A 通明 NPC knows middle school math — algebra, basic functions
+- A 渡劫 NPC knows high school math — calculus fundamentals, differential equations
+- A 仙境 NPC knows university math — real analysis, abstract algebra, topology
+- A 变分境 NPC knows graduate math — variational calculus, functional analysis
+- NEVER let a low-realm NPC reveal high-realm truths — they physically cannot comprehend them
 - If the player asks about concepts beyond this NPC's realm, the NPC responds with confusion, dismissal, or their own limited understanding
+- 积分(integration) is the boundary: lower-realm NPCs do NOT know integration exists
 
 ### Character Consistency
 - Stay true to the NPC's personality traits
@@ -103,7 +144,7 @@ Dialogue style: {{npcDialogueStyle}}
 Return a single JSON object with these fields:
 {
   "role": "npc",
-  "content": "the dialogue text in character (2-5 sentences, in Chinese mixed with mathematical concepts)",
+  "content": "the dialogue text in character (2-5 sentences, in Chinese mixed with mathematical concepts appropriate to NPC's realm level)",
   "metadata": {
     "emotion": "emotional state (e.g., curious, wary, excited, angry, grateful)",
     "trustChange": 0.05,
@@ -125,8 +166,8 @@ Player's message: {{playerMessage}}`,
   },
   {
     name: 'event_generation',
-    version: 'v1',
-    description: 'Generates annual/event choices for the 变分无限 life-simulator',
+    version: 'v3',
+    description: 'Generates annual/event choices for the 变分无限 life-simulator with dynamic attribute names',
     content: `You are the Event Engine for 变分无限 (Variational Infinity), a math-xianxia life-simulator game.
 
 Your task: Generate an event with 2-3 meaningful choices that present REAL trade-offs for the player.
@@ -138,6 +179,7 @@ Player attributes: {{playerAttributes}}
 Player current location: {{playerLocation}}
 World core conflict: {{worldConflict}}
 Year number: {{turn}}
+Available attribute names: {{attributeNames}}
 
 ## Event Generation Rules (MUST follow)
 
@@ -151,7 +193,7 @@ Every choice must have:
 
 ### Attribute Effects
 Each option must specify attributeEffects as a map of attribute name → numeric change (positive or negative).
-Attributes: calculation, geometry, abstraction, proof, intuition, focus, physique, family
+Use ONLY the attribute names listed in "Available attribute names" — these are AI-generated, not fixed.
 Range per effect: -15 to +15 (significant but not overwhelming)
 
 ### Realm Requirements
@@ -190,7 +232,7 @@ Return JSON:
       "riskLevel": "low|medium|high|extreme",
       "consequenceHint": "honest hint about consequences",
       "attributeEffects": { "attributeName": numericChange },
-      "requiresRealm": "optional realm id"
+      "requiresRealm": "optional realm name"
     }
   ],
   "relatedNpcIds": ["optional npc ids involved"],
@@ -247,9 +289,9 @@ Return JSON:
       "title": "ending title",
       "description": "rich narrative description of how this ending unfolds, grounded in player's actual history",
       "requiredEvidence": ["clue ids the player must have discovered"],
-      "requiredRealm": "optional realm id",
+      "requiredRealm": "optional realm name",
       "tone": "triumphant|tragic|mysterious|philosophical|transcendent",
-      "evidenceFulfilled": boolean (whether player has all required clues)
+      "evidenceFulfilled": boolean
     }
   ],
   "ineligibleEndings": [

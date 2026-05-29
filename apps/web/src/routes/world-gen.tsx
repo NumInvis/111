@@ -2,25 +2,20 @@ import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Panel } from '@/components/ui/Panel'
-import { Tag } from '@/components/ui/Tag'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Sparkles, Dice5, Loader2 } from 'lucide-react'
+import { ArrowLeft, Sparkles, Loader2 } from 'lucide-react'
 import { useGameStore } from '@/stores/gameStore'
-import { createSession, generateWorld, getGameState, toGenPref } from '@/lib/api'
+import { createSession, generateWorld, getGameState } from '@/lib/api'
 
 export const Route = createFileRoute('/world-gen')({
   component: WorldGenPage,
 })
 
-const DIRECTIONS = ['纯粹数学','应用数学','计算数学','统计概率','随机混沌']
-const MODES = ['快速模式','完整模式','无限模式']
-
 function WorldGenPage() {
   const navigate = useNavigate()
-  const { setSessionId, setPreference, setWorldBlueprint, setPlayer, setCurrentYear } = useGameStore()
+  const { setSessionId, setWorldBlueprint, setPlayer, setCurrentYear } = useGameStore()
 
-  const [pref, setPref] = useState({ direction: '纯粹数学', mode: '完整模式', seed: undefined as number | undefined })
   const [loading, setLoading] = useState(false)
   const [step, setStep] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -32,9 +27,8 @@ function WorldGenPage() {
     try {
       const session = await createSession()
       setSessionId(session.id)
-      setPreference(pref)
       setStep('AI 正在生成世界...')
-      const blueprint = await generateWorld(session.id, toGenPref(pref))
+      const blueprint = await generateWorld(session.id)
       setWorldBlueprint(blueprint)
       const playerState = await getGameState(session.id)
       setPlayer(playerState)
@@ -68,60 +62,22 @@ function WorldGenPage() {
         ) : (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
             <div className="text-center mb-8">
-              <h2 className="font-mono text-3xl font-black mb-2">配置你的世界</h2>
-              <p className="text-text-secondary">AI 根据数学方向偏好生成独一无二的修行世界</p>
+              <h2 className="font-mono text-3xl font-black mb-2">开天辟地</h2>
+              <p className="text-text-secondary">AI 为你生成独一无二的修行世界</p>
             </div>
             {error && (
               <div className="bg-accent-red border-3 border-border-primary shadow-nb p-4 mb-6 text-text-inverse font-mono text-sm">{error}</div>
             )}
-            <Panel title="世界参数" titleBg="dark" className="mb-6">
-              <div className="mb-6">
-                <h3 className="font-mono text-base font-bold mb-3">数学方向</h3>
-                <div className="flex flex-wrap gap-2">
-                  {DIRECTIONS.map((d) => (
-                    <button key={d} onClick={() => setPref((p) => ({ ...p, direction: d }))}
-                      className={`px-4 py-2 font-mono font-bold border-3 border-border-primary transition-all ${
-                        pref.direction === d ? 'bg-primary shadow-nb-lg -translate-x-0.5 -translate-y-0.5' : 'bg-bg-card shadow-nb hover:shadow-nb-lg'
-                      }`}>{d}</button>
-                  ))}
-                </div>
-              </div>
-              <div className="mb-6">
-                <h3 className="font-mono text-base font-bold mb-3">推演模式</h3>
-                <div className="flex flex-wrap gap-2">
-                  {MODES.map((m) => (
-                    <button key={m} onClick={() => setPref((p) => ({ ...p, mode: m }))}
-                      className={`px-4 py-2 font-mono font-bold border-3 border-border-primary transition-all ${
-                        pref.mode === m ? 'bg-accent-cyan shadow-nb-lg -translate-x-0.5 -translate-y-0.5' : 'bg-bg-card shadow-nb hover:shadow-nb-lg'
-                      }`}>{m}</button>
-                  ))}
-                </div>
-              </div>
-              <div className="mb-6">
-                <h3 className="font-mono text-base font-bold mb-3">随机种子（可选）</h3>
-                <input type="number" value={pref.seed ?? ''}
-                  onChange={(e) => setPref((p) => ({ ...p, seed: e.target.value ? Number(e.target.value) : undefined }))}
-                  placeholder="留空则随机"
-                  className="w-full bg-bg-card border-3 border-border-primary px-4 py-2 font-mono focus:outline-none focus:border-primary focus:shadow-nb"
-                />
-              </div>
-              <div className="border-t-3 border-border-primary pt-4">
-                <div className="flex flex-wrap gap-2">
-                  <Tag variant="warning">{pref.direction}</Tag>
-                  <Tag variant="info">{pref.mode}</Tag>
-                  {pref.seed !== undefined && <Tag variant="success">Seed: {pref.seed}</Tag>}
-                </div>
+            <Panel title="世界生成" titleBg="dark" className="mb-6">
+              <div className="text-center py-8">
+                <p className="font-mono text-text-secondary mb-6">
+                  一切由天意决定。AI 将自主决定世界主题、属性体系、突破规则。
+                </p>
+                <Button size="lg" className="gap-2" onClick={handleGenerate}>
+                  <Sparkles className="w-5 h-5" /> 开天辟地
+                </Button>
               </div>
             </Panel>
-            <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <Button size="lg" className="gap-2" onClick={handleGenerate}>
-                <Sparkles className="w-5 h-5" /> 生成世界
-              </Button>
-              <Button variant="secondary" size="lg" className="gap-2"
-                onClick={() => setPref({ direction: DIRECTIONS[Math.floor(Math.random()*DIRECTIONS.length)], mode: MODES[Math.floor(Math.random()*MODES.length)], seed: Math.floor(Math.random()*1000000) })}>
-                <Dice5 className="w-5 h-5" /> 随机配置
-              </Button>
-            </div>
           </motion.div>
         )}
       </main>

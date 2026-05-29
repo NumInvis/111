@@ -14,7 +14,6 @@ export {
   RealmAdvancementChecker,
   type RuleCheckResult,
   evaluateTriggerCondition,
-  REALM_ADVANCEMENT_THRESHOLDS,
   REALM_NAMES_ORDERED,
 } from './rules/index';
 
@@ -37,3 +36,15 @@ export {
   type TraceEntry,
   type ReplayResult,
 } from './harness/replay';
+
+export {
+  WORLD_BOOK,
+  getWorldBookEntry,
+  getMathLevel,
+  isBoundaryWall,
+  isUntouchable,
+  isLowerRealm,
+  isUpperRealm,
+  formatWorldBookForPrompt,
+  type WorldBookEntry,
+} from './constants/world-book';

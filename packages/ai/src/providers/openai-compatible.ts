@@ -129,6 +129,7 @@ export class OpenaiCompatibleProvider implements LlmProviderAdapter {
     }
   }
 
+  /** @internal Not used by any caller. SSE streaming infrastructure for future use. */
   async *generateStream(
     prompt: string,
     model: string,

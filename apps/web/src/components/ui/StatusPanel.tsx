@@ -1,7 +1,6 @@
 import { forwardRef } from 'react'
 import { useGameStore } from '@/stores/gameStore'
-import type { PlayerState, Attribute } from '@/types'
-import { ATTRIBUTE_LABELS } from '@/types'
+import type { PlayerState } from '@/types'
 
 interface StatusPanelProps {
   player: PlayerState
@@ -14,9 +13,12 @@ const StatusPanel = forwardRef<HTMLDivElement, StatusPanelProps>(
     const locationName = worldBlueprint?.locations.find(
       (l) => l.id === player.currentLocationId,
     )?.name ?? player.currentLocationId
-    const attrEntries = (Object.entries(ATTRIBUTE_LABELS) as [keyof Attribute, string][]).map(
-      ([key, label]) => ({ key, label, value: player.attributes[key] })
-    )
+    const attributeDefs = worldBlueprint?.attributeDefs ?? []
+    const attrEntries = attributeDefs.map((def) => ({
+      key: def.name,
+      label: def.name,
+      value: player.attributes[def.name] ?? 0,
+    }))
 
     return (
       <div ref={ref} className="bg-bg-card border-3 border-border-primary shadow-nb">

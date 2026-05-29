@@ -1,7 +1,6 @@
 import { create } from 'zustand'
 import { produce } from 'immer'
 import type {
-  WorldPreference,
   WorldBlueprint,
   PlayerState,
   JournalEntry,
@@ -14,7 +13,6 @@ import type {
 
  interface GameState {
   sessionId: string | null
-  preference: WorldPreference | null
   worldBlueprint: WorldBlueprint | null
   player: PlayerState | null
   currentYear: number
@@ -26,7 +24,6 @@ import type {
   error: string | null
   loading: boolean
   setSessionId: (id: string | null) => void
-  setPreference: (p: WorldPreference) => void
   setWorldBlueprint: (wb: WorldBlueprint | null) => void
   setPlayer: (p: PlayerState | null) => void
   setCurrentYear: (y: number) => void
@@ -42,7 +39,6 @@ import type {
 
  export const useGameStore = create<GameState>((set) => ({
   sessionId: null,
-  preference: null,
   worldBlueprint: null,
   player: null,
   currentYear: 16,
@@ -54,7 +50,6 @@ import type {
   error: null,
   loading: false,
   setSessionId: (id) => set(produce((draft) => { draft.sessionId = id })),
-  setPreference: (p) => set(produce((draft) => { draft.preference = p })),
   setWorldBlueprint: (wb) => set(produce((draft) => { draft.worldBlueprint = wb })),
   setPlayer: (p) => set(produce((draft) => { draft.player = p })),
   setCurrentYear: (y) => set(produce((draft) => { draft.currentYear = y })),
@@ -75,7 +70,6 @@ import type {
   setLoading: (l) => set(produce((draft) => { draft.loading = l })),
   reset: () => set({
     sessionId: null,
-    preference: null,
     worldBlueprint: null,
     player: null,
     currentYear: 16,

@@ -1,16 +1,7 @@
 import { z } from 'zod';
-import { RealmNameEnum, AttributeNameEnum } from './world-blueprint.schema';
+import { RealmNameEnum } from './world-blueprint.schema';
 
-export const AttributeSchema = z.object({
-  calculation: z.number().min(0).max(100).describe('计算 — computational and arithmetic reasoning ability'),
-  geometry: z.number().min(0).max(100).describe('几何 — spatial and geometric reasoning ability'),
-  abstraction: z.number().min(0).max(100).describe('抽象 — abstract and conceptual reasoning ability'),
-  proof: z.number().min(0).max(100).describe('证明 — logical proof and deductive reasoning ability'),
-  intuition: z.number().min(0).max(100).describe('直觉 — mathematical intuition and insight ability'),
-  focus: z.number().min(0).max(100).describe('专注 — concentration and mental endurance ability'),
-  physique: z.number().min(0).max(100).describe('体魄 — physical health and vitality'),
-  family: z.number().min(0).max(100).describe('家世 — family background and social resources'),
-});
+export const AttributeSchema = z.record(z.string(), z.number().min(0).max(100));
 
 export type Attribute = z.infer<typeof AttributeSchema>;
 
@@ -40,7 +31,7 @@ export const PlayerStateSchema = z.object({
   lifespan: z.number().min(0).default(80).describe('Maximum lifespan before natural death (default 80)'),
   realm: RealmNameEnum.default('炼体').describe('Current cultivation realm the player has achieved'),
   currentLocationId: z.string().describe('ID of the location where the player currently resides'),
-  attributes: AttributeSchema.describe('The 8 core numeric attributes of the player'),
+  attributes: AttributeSchema.describe('Dynamic numeric attributes defined by WorldBlueprint.attributeDefs'),
   discoveredLocations: z.array(z.string()).describe('IDs of locations the player has discovered'),
   discoveredNpcs: z.array(z.string()).describe('IDs of NPCs the player has encountered'),
   discoveredClues: z.array(z.string()).describe('IDs of clues/evidence the player has found'),
@@ -133,3 +124,46 @@ export const JournalEntrySchema = z.object({
 });
 
 export type JournalEntry = z.infer<typeof JournalEntrySchema>;
+
+export const NpcDialogueMetadataSchema = z.object({
+  emotion: z.string(),
+  trustChange: z.number().min(-0.1).max(0.1),
+  hintAtSecret: z.boolean().optional(),
+  suggestedActions: z.array(z.string()).optional(),
+});
+
+export type NpcDialogueMetadata = z.infer<typeof NpcDialogueMetadataSchema>;
+
+export const NpcDialogueOutputSchema = z.object({
+  role: z.string(),
+  content: z.string(),
+  metadata: NpcDialogueMetadataSchema.optional(),
+});
+
+export type NpcDialogueOutput = z.infer<typeof NpcDialogueOutputSchema>;
+
+export const EndingEligibilitySchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  description: z.string(),
+  requiredEvidence: z.array(z.string()),
+  requiredRealm: z.string().optional(),
+  tone: z.string(),
+  evidenceFulfilled: z.boolean(),
+});
+
+export type EndingEligibility = z.infer<typeof EndingEligibilitySchema>;
+
+export const IneligibleEndingSchema = z.object({
+  id: z.string(),
+  reason: z.string(),
+});
+
+export type IneligibleEnding = z.infer<typeof IneligibleEndingSchema>;
+
+export const EndingOutputSchema = z.object({
+  eligibleEndings: z.array(EndingEligibilitySchema),
+  ineligibleEndings: z.array(IneligibleEndingSchema),
+});
+
+export type EndingOutput = z.infer<typeof EndingOutputSchema>;

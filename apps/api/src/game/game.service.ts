@@ -29,7 +29,6 @@ import {
   GameActionSchema,
   EventTypeEnum,
   JournalCategoryEnum,
-  AttributeNameEnum,
   NpcDialogueOutputSchema,
   EndingOutputSchema,
 } from '@variational-infinity/shared';
@@ -50,7 +49,6 @@ export class GameService {
   private readonly logger = new Logger(GameService.name);
   private readonly actionValidator = new ActionValidator();
   private readonly endingArbitrator = new EndingArbitrator();
-  private readonly realmAdvancementChecker = new RealmAdvancementChecker();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -495,7 +493,7 @@ export class GameService {
           forbiddenTopics: npc.forbiddenTopics,
           dialogueStyle: npc.dialogueStyle,
           cultivationLevel: npc.cultivationLevel,
-          mathematicalStrength: npc.mathematicalStrength,
+          specialty: npc.specialty,
           trustLevel: npc.trustLevel,
           memorySummary,
         },
@@ -520,7 +518,7 @@ export class GameService {
         npcForbiddenTopics: npc.forbiddenTopics.join(', '),
         npcDialogueStyle: npc.dialogueStyle,
         npcRealm: npc.cultivationLevel ?? 'unknown',
-        npcMathStrength: npc.mathematicalStrength ?? 'unknown',
+        npcSpecialty: npc.specialty ?? 'unknown',
         playerRealm: playerState.realm,
         playerAttributes: JSON.stringify(playerState.attributes),
         playerMessage,
@@ -627,7 +625,8 @@ export class GameService {
     const worldBlueprint = await this.loadWorldBlueprint(sessionId);
     const { playerState } = await this.loadPlayerState(sessionId);
 
-    const result = this.realmAdvancementChecker.checkRealmAdvancement(
+    const realmAdvancementChecker = new RealmAdvancementChecker(worldBlueprint.advancementRules);
+    const result = realmAdvancementChecker.checkRealmAdvancement(
       playerState.realm,
       playerState.attributes,
     );

@@ -19,14 +19,6 @@ const SendDialogueMessageBodySchema = z.object({
   message: z.string().min(1),
 });
 
-const GenerationPreferencesSchema = z.object({
-  theme: z.string().min(1),
-  scale: z.enum(['small', 'medium', 'large']),
-  tone: z.string().min(1),
-  seed: z.number().int().optional(),
-  mode: z.enum(['quick', 'complete', 'infinite']),
-});
-
 const StoreAgentMemoryBodySchema = z.object({
   npcId: z.string().min(1),
   memoryType: z.string().min(1),
@@ -40,5 +32,4 @@ export class TriggerEndingDto extends createZodDto(TriggerEndingBodySchema) {}
 export class StartDialogueDto extends createZodDto(StartDialogueBodySchema) {}
 export class SendDialogueMessageDto extends createZodDto(SendDialogueMessageBodySchema) {}
 export class ApplyActionDto extends createZodDto(GameActionSchema) {}
-export class GenerationPreferencesDto extends createZodDto(GenerationPreferencesSchema) {}
 export class StoreAgentMemoryDto extends createZodDto(StoreAgentMemoryBodySchema) {}

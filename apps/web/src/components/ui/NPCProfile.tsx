@@ -38,10 +38,10 @@ const NPCProfile = forwardRef<HTMLDivElement, NPCProfileProps>(
             <p className="text-sm text-text-primary leading-relaxed">{npc.goal}</p>
           </div>
 
-          {npc.mathematicalStrength && (
+          {npc.specialty && (
             <div>
               <div className="font-mono text-xs font-bold text-text-secondary mb-1">数学特长</div>
-              <p className="text-sm text-text-primary">{npc.mathematicalStrength}</p>
+              <p className="text-sm text-text-primary">{npc.specialty}</p>
             </div>
           )}
 

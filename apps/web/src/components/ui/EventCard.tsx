@@ -1,6 +1,4 @@
 import type { EventSeed } from '@/types'
-import { ATTRIBUTE_LABELS } from '@/types'
-import type { AttributeKey } from '@/types'
 
 interface EventCardProps {
   event: EventSeed
@@ -34,7 +32,7 @@ export function EventCard({ event, onSelectOption }: EventCardProps) {
                 <div className="flex flex-wrap gap-1 mt-2">
                   {Object.entries(opt.attributeEffects).map(([attr, delta]) => (
                     <span key={attr} className="px-1 py-0.5 text-xs font-mono border border-border-primary bg-accent-cyan">
-                      {ATTRIBUTE_LABELS[attr as AttributeKey] ?? attr} {delta > 0 ? '+' : ''}{delta}
+                      {attr} {delta > 0 ? '+' : ''}{delta}
                     </span>
                   ))}
                 </div>

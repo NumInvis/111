@@ -1,9 +1,6 @@
 import type {
   ApiResponse,
   WorldBlueprint,
-  GenerationPreferences,
-  GenerationScale,
-  GenerationMode,
   PlayerState,
   StateUpdate,
   EndingCandidate,
@@ -65,13 +62,10 @@ export async function applyAction(
   return requireData(res, 'applyAction')
 }
 
-export async function generateWorld(
-  sessionId: string,
-  preferences: GenerationPreferences,
-): Promise<WorldBlueprint> {
+export async function generateWorld(sessionId: string): Promise<WorldBlueprint> {
   const res = await fetchApi<WorldBlueprint>(`/generation/world/${sessionId}`, {
     method: 'POST',
-    body: JSON.stringify(preferences),
+    body: JSON.stringify({}),
   })
   return requireData(res, 'generateWorld')
 }
@@ -132,28 +126,6 @@ export async function endSession(sessionId: string): Promise<{ id: string; statu
     method: 'POST',
   })
   return requireData(res, 'endSession')
-}
-
-const SCALE_MAP: Record<string, GenerationScale> = {
-  '快速模式': 'small',
-  '完整模式': 'medium',
-  '无限模式': 'large',
-}
-
-const MODE_MAP: Record<string, GenerationMode> = {
-  '快速模式': 'quick',
-  '完整模式': 'complete',
-  '无限模式': 'infinite',
-}
-
-export function toGenPref(pref: { direction: string; mode: string; seed?: number }): GenerationPreferences {
-  return {
-    theme: pref.direction,
-    scale: SCALE_MAP[pref.mode] ?? 'medium',
-    tone: 'immersive',
-    seed: pref.seed,
-    mode: MODE_MAP[pref.mode] ?? 'complete',
-  }
 }
 
 export async function getProviders(): Promise<{ active: string; available: string[] }> {

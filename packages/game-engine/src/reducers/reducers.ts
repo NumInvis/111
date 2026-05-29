@@ -10,9 +10,10 @@ import type {
   FriendshipLevel,
   Clue,
   RealmName,
+  AttributeDef,
 } from '@variational-infinity/shared';
 import { realmOrder } from '../state-machine/game-state-machine';
-import { RealmAdvancementChecker, StateBoundsChecker, REALM_NAMES_ORDERED, REALM_ADVANCEMENT_THRESHOLDS, evaluateTriggerCondition } from '../rules/rules';
+import { RealmAdvancementChecker, StateBoundsChecker, REALM_NAMES_ORDERED, evaluateTriggerCondition } from '../rules/rules';
 import type { TriggerCondition } from '@variational-infinity/shared';
 
 export interface StateUpdate {
@@ -58,18 +59,13 @@ function createGameEvent(
   };
 }
 
-const ANNUAL_ATTRIBUTE_GROWTH: Partial<Attribute> = {
-  calculation: 1,
-  geometry: 1,
-  abstraction: 1,
-  proof: 1,
-  intuition: 1,
-  focus: 2,
-  physique: 2,
-  family: 1,
-};
-
-const FAMILY_ATTRIBUTE_CAP = 30;
+function getGrowthMap(attributeDefs: AttributeDef[]): Record<string, number> {
+  const map: Record<string, number> = {};
+  for (const def of attributeDefs) {
+    map[def.name] = def.growthPerYear;
+  }
+  return map;
+}
 
 function validateBounds(currentState: PlayerState, proposedUpdate: Partial<PlayerState>): void {
   const result = new StateBoundsChecker().checkStateBounds(currentState, proposedUpdate);
@@ -78,38 +74,9 @@ function validateBounds(currentState: PlayerState, proposedUpdate: Partial<Playe
   }
 }
 
-const BREAKTHROUGH_COST: Record<string, number> = {
-  '练气': 3,
-  '筑基': 3,
-  '本元': 5,
-  '通明': 5,
-  '化神': 5,
-  '归一': 5,
-  '渡劫': 8,
-  '天门': 8,
-  '仙境': 8,
-  '圣境': 8,
-  '变分境': 8,
-  '天道境': 8,
-  '无限': 8,
-};
-
-const LIFESPAN_EXTENSION: Record<string, number> = {
-  '炼体': 5,
-  '练气': 5,
-  '筑基': 5,
-  '本元': 8,
-  '通明': 8,
-  '化神': 10,
-  '归一': 10,
-  '渡劫': 12,
-  '天门': 15,
-  '仙境': 15,
-  '圣境': 18,
-  '变分境': 18,
-  '天道境': 20,
-  '无限': 20,
-};
+function createAdvancementChecker(worldBlueprint: WorldBlueprint): RealmAdvancementChecker {
+  return new RealmAdvancementChecker(worldBlueprint.advancementRules);
+}
 
 export function applyMoveAction(
   sessionId: string,
@@ -272,17 +239,16 @@ export function applyNextYearAction(
   worldBlueprint: WorldBlueprint,
 ): StateUpdate {
   const newAge = currentState.age + 1;
+  const growthMap = getGrowthMap(worldBlueprint.attributeDefs);
 
   const updatedAttributes: Attribute = { ...currentState.attributes };
-  for (const [key, growth] of Object.entries(ANNUAL_ATTRIBUTE_GROWTH)) {
-    const attrKey = key as keyof Attribute;
-    if (attrKey in updatedAttributes && growth > 0) {
-      const cap = attrKey === 'family' ? FAMILY_ATTRIBUTE_CAP : 100;
-      updatedAttributes[attrKey] = Math.min(cap, updatedAttributes[attrKey] + growth);
+  for (const [attrName, growth] of Object.entries(growthMap)) {
+    if (attrName in updatedAttributes && growth > 0) {
+      updatedAttributes[attrName] = Math.min(100, updatedAttributes[attrName] + growth);
     }
   }
 
-  const advancementChecker = new RealmAdvancementChecker();
+  const advancementChecker = createAdvancementChecker(worldBlueprint);
   const advancementResult = advancementChecker.checkRealmAdvancement(
     currentState.realm,
     updatedAttributes,
@@ -558,9 +524,8 @@ export function applyEventChoiceAction(
   const updatedAttributes: Attribute = { ...currentState.attributes };
 
   for (const [attrName, delta] of Object.entries(effects)) {
-    const key = attrName as keyof Attribute;
-    if (key in updatedAttributes) {
-      updatedAttributes[key] = Math.max(0, Math.min(100, updatedAttributes[key] + delta));
+    if (attrName in updatedAttributes) {
+      updatedAttributes[attrName] = Math.max(0, Math.min(100, updatedAttributes[attrName] + delta));
     }
   }
 
@@ -705,7 +670,7 @@ export function applyAttemptBreakthroughAction(
   payload: Record<string, unknown>,
   worldBlueprint: WorldBlueprint,
 ): StateUpdate {
-  const advancementChecker = new RealmAdvancementChecker();
+  const advancementChecker = createAdvancementChecker(worldBlueprint);
   const result = advancementChecker.checkRealmAdvancement(
     currentState.realm,
     currentState.attributes,
@@ -719,27 +684,20 @@ export function applyAttemptBreakthroughAction(
   }
 
   if (result.allowed) {
-    const thresholds = REALM_ADVANCEMENT_THRESHOLDS[nextRealm];
-    const thresholdKeys = Object.keys(thresholds ?? {});
-    let primaryAttribute: keyof Attribute = (thresholdKeys.length > 0 ? thresholdKeys[0] : 'focus') as keyof Attribute;
-    if (thresholdKeys.length > 1) {
-      let minGap = Infinity;
-      for (const key of thresholdKeys) {
-        const attrKey = key as keyof Attribute;
-        const threshold = (thresholds as Record<string, number>)[key] ?? 100;
-        const gap = threshold - (currentState.attributes[attrKey] ?? 0);
-        if (gap < minGap) {
-          minGap = gap;
-          primaryAttribute = attrKey;
-        }
-      }
+    const rule = advancementChecker.getAdvancementRule(currentState.realm);
+    if (!rule) {
+      throw new Error(`No advancement rule found from "${currentState.realm}" to "${nextRealm}".`);
     }
-    const consumptionAmount = BREAKTHROUGH_COST[nextRealm] ?? 5;
+
+    const primaryAttribute = rule.primaryAttribute;
+    const consumptionAmount = rule.breakthroughCost;
 
     const updatedAttributes: Attribute = { ...currentState.attributes };
-    updatedAttributes[primaryAttribute] = Math.max(0, updatedAttributes[primaryAttribute] - consumptionAmount);
+    if (primaryAttribute in updatedAttributes) {
+      updatedAttributes[primaryAttribute] = Math.max(0, updatedAttributes[primaryAttribute] - consumptionAmount);
+    }
 
-    const lifespanExtension = LIFESPAN_EXTENSION[nextRealm] ?? 0;
+    const lifespanExtension = rule.lifespanExtension;
     const newLifespan = currentState.lifespan + lifespanExtension;
 
     validateBounds(currentState, { realm: nextRealm, attributes: updatedAttributes, lifespan: newLifespan });
@@ -773,7 +731,8 @@ export function applyAttemptBreakthroughAction(
     };
   }
 
-  const lifespanPenalty = 2;
+  const rule = advancementChecker.getAdvancementRule(currentState.realm);
+  const lifespanPenalty = rule?.failureLifespanLoss ?? 2;
   const newLifespan = Math.max(1, currentState.lifespan - lifespanPenalty);
 
   validateBounds(currentState, { lifespan: newLifespan });
