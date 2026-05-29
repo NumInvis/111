@@ -88,7 +88,7 @@ async def generate_npc_dialogue(request: NpcDialogueRequest, settings: Settings)
 
     result = await agent.run(
         user_prompt,
-        model_settings={"base_url": settings.llm_base_url, "api_key": settings.llm_api_key},
+        model_settings={"base_url": settings.llm_base_url, "api_key": settings.llm_api_key, "max_tokens": 4096},
     )
 
     return result.output

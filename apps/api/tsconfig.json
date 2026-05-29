@@ -8,20 +8,12 @@
     "declarationMap": true,
     "sourceMap": true,
     "outDir": "./dist",
-    "baseUrl": ".",
-    "rootDir": "./src",
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "paths": {
-      "@vi/shared": ["../../packages/shared/src/index.ts"],
-      "@vi/ai": ["../../packages/ai/src/index.ts"],
-      "@vi/game-engine": ["../../packages/game-engine/src/index.ts"],
-      "@vi/observability": ["../../packages/observability/src/index.ts"]
-    }
+    "forceConsistentCasingInFileNames": true
   },
-  "include": ["src/**/*.ts", "../../packages/shared/src/**/*.ts", "../../packages/ai/src/**/*.ts", "../../packages/game-engine/src/**/*.ts", "../../packages/observability/src/**/*.ts"],
+  "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }

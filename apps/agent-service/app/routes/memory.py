@@ -1,5 +1,3 @@
-from datetime import datetime, timezone
-
 from fastapi import APIRouter, HTTPException
 
 from app.agents.memory_agent import summarize_memory
@@ -12,27 +10,38 @@ router = APIRouter()
 memory_store = MemoryStore()
 
 
-@router.post("/store", response_model=MemoryEntry)
-async def store_memory(entry: MemoryEntry):
-    entry.created_at = datetime.now(timezone.utc).isoformat()
-    memory_store.add_long_term(entry)
-    return entry
+@router.post("/{session_id}/store", response_model=MemoryEntry)
+async def store_memory(session_id: str, entry: MemoryEntry):
+    try:
+        stored = await memory_store.store(session_id, entry)
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Failed to store memory via NestJS: {e}")
+    return stored
 
 
-@router.post("/retrieve", response_model=list[MemoryEntry])
-async def retrieve_memories(npc_id: str, limit: int = 20):
-    memories = memory_store.get_long_term(npc_id, limit)
+@router.get("/{session_id}/retrieve", response_model=list[MemoryEntry])
+async def retrieve_memories(session_id: str, npc_id: str, limit: int = 20):
+    try:
+        memories = await memory_store.retrieve(session_id, npc_id, limit)
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Failed to retrieve memories via NestJS: {e}")
     return memories
 
 
-@router.post("/summarize", response_model=list[MemoryEntry])
-async def summarize_memories(npc_id: str, raw_content: str):
+@router.post("/{session_id}/summarize", response_model=list[MemoryEntry])
+async def summarize_memories(session_id: str, npc_id: str, raw_content: str):
     settings = get_settings()
     try:
         summaries = await summarize_memory(raw_content, npc_id, settings)
     except ValueError as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+    stored_summaries: list[MemoryEntry] = []
     for summary in summaries:
-        memory_store.add_long_term(summary)
-    return summaries
+        try:
+            stored = await memory_store.store(session_id, summary)
+            stored_summaries.append(stored)
+        except Exception:
+            stored_summaries.append(summary)
+
+    return stored_summaries

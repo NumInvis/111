@@ -1,15 +1,17 @@
 import { Controller, Get, Post, Param, Body, NotFoundException, BadRequestException } from '@nestjs/common';
 import { GameService } from './game.service';
-import type { ApiResponse, GameAction, PlayerState, EndingCandidate } from '@vi/shared';
-import type { StateUpdate } from '@vi/game-engine';
+import type { ApiResponse, EndingCandidate } from '@variational-infinity/shared';
+import type { PlayerState, GameAction } from '@variational-infinity/shared';
+import type { StateUpdate } from '@variational-infinity/game-engine';
+import { CreateSessionDto, ApplyActionDto, TriggerEndingDto, StartDialogueDto, SendDialogueMessageDto, StoreAgentMemoryDto } from '../dto/dto';
 
 @Controller('game')
 export class GameController {
   constructor(private readonly gameService: GameService) {}
 
   @Post('sessions')
-  async createSession(@Body() body?: { userId?: string }): Promise<ApiResponse<{ id: string; status: string }>> {
-    const session = await this.gameService.createSession(body?.userId);
+  async createSession(@Body() body: CreateSessionDto): Promise<ApiResponse<{ id: string; status: string }>> {
+    const session = await this.gameService.createSession(body.userId);
     return { success: true, data: session };
   }
 
@@ -26,7 +28,7 @@ export class GameController {
   @Post('sessions/:id/actions')
   async applyAction(
     @Param('id') id: string,
-    @Body() action: GameAction,
+    @Body() action: ApplyActionDto,
   ): Promise<ApiResponse<StateUpdate>> {
     try {
       const result = await this.gameService.applyAction(id, action);
@@ -71,7 +73,7 @@ export class GameController {
   @Post('sessions/:id/trigger-ending')
   async triggerEnding(
     @Param('id') id: string,
-    @Body() body: { endingId: string },
+    @Body() body: TriggerEndingDto,
   ): Promise<ApiResponse<{ endingId: string; summary: string }>> {
     try {
       const result = await this.gameService.triggerEnding(id, body.endingId);
@@ -95,7 +97,7 @@ export class GameController {
   @Post('sessions/:id/dialogue')
   async startDialogue(
     @Param('id') id: string,
-    @Body() body: { npcId: string },
+    @Body() body: StartDialogueDto,
   ): Promise<ApiResponse<{ npcId: string; phase: string }>> {
     try {
       const result = await this.gameService.startDialogue(id, body.npcId);
@@ -109,7 +111,7 @@ export class GameController {
   @Post('sessions/:id/dialogue/message')
   async sendDialogueMessage(
     @Param('id') id: string,
-    @Body() body: { npcId: string; message: string },
+    @Body() body: SendDialogueMessageDto,
   ): Promise<ApiResponse<{ content: string; emotion: string; trustChange: number }>> {
     try {
       const result = await this.gameService.generateDialogueMessage(id, body.npcId, body.message);
@@ -117,6 +119,40 @@ export class GameController {
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Dialogue generation failed';
       throw new BadRequestException(msg);
+    }
+  }
+
+  @Get('sessions/:id/agent-memory')
+  async getAgentMemory(@Param('id') id: string): Promise<ApiResponse<Record<string, unknown>[]>> {
+    try {
+      const memories = await this.gameService.getAgentMemory(id);
+      return { success: true, data: memories as Record<string, unknown>[] };
+    } catch {
+      throw new NotFoundException(`No agent memory for session "${id}"`);
+    }
+  }
+
+  @Post('sessions/:id/agent-memory')
+  async storeAgentMemory(
+    @Param('id') id: string,
+    @Body() body: StoreAgentMemoryDto,
+  ): Promise<ApiResponse<Record<string, unknown>>> {
+    try {
+      const memory = await this.gameService.storeAgentMemory(id, body);
+      return { success: true, data: memory as Record<string, unknown> };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Store agent memory failed';
+      throw new BadRequestException(msg);
+    }
+  }
+
+  @Get('sessions/:id/trace')
+  async getGameTrace(@Param('id') id: string): Promise<ApiResponse<Record<string, unknown>[]>> {
+    try {
+      const traces = await this.gameService.getGameTrace(id);
+      return { success: true, data: traces as Record<string, unknown>[] };
+    } catch {
+      throw new NotFoundException(`No trace for session "${id}"`);
     }
   }
 }

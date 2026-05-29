@@ -7,10 +7,18 @@ import { EventCard } from '@/components/ui/EventCard'
 import { StatusPanel } from '@/components/ui/StatusPanel'
 import { Card } from '@/components/ui/Card'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, MessageSquare, Scroll, Calendar, MapPin, Loader2 } from 'lucide-react'
+import { ArrowLeft, Scroll, Calendar, MapPin, Loader2, Zap } from 'lucide-react'
 import { useGameStore } from '@/stores/gameStore'
 import { nextYear, applyAction, checkEndings } from '@/lib/api'
-import type { PlayerState } from '@/types'
+import type { PlayerState, TriggerCondition } from '@/types'
+
+function evaluateTrigger(condition: TriggerCondition, player: PlayerState): boolean {
+  if (condition.minAge !== undefined && player.age < condition.minAge) return false
+  if (condition.discoveredNpcId && !player.discoveredNpcs.includes(condition.discoveredNpcId)) return false
+  if (condition.discoveredClueId && !player.discoveredClues.includes(condition.discoveredClueId)) return false
+  if (condition.locationId && player.currentLocationId !== condition.locationId) return false
+  return true
+}
 
 export const Route = createFileRoute('/explore')({
   component: ExplorePage,
@@ -27,17 +35,22 @@ function ExplorePage() {
   const [isAdvancing, setIsAdvancing] = useState(false)
   const [isActing, setIsActing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [breakthroughHint, setBreakthroughHint] = useState<string | null>(null)
 
   const currentLocation = worldBlueprint?.locations.find(
     (l) => l.id === player?.currentLocationId,
   ) ?? null
 
-  const locationEvents = worldBlueprint?.events.filter(
-    (e) => e.locationId === player?.currentLocationId,
+  const nearbyNpcs = worldBlueprint?.npcs.filter((n) =>
+    player?.discoveredNpcs.includes(n.id) || n.trustLevel >= 0.5 || worldBlueprint!.clues.some((c) => c.npcId === n.id && c.locationId === player?.currentLocationId)
   ) ?? []
 
-  const nearbyNpcs = worldBlueprint?.npcs.filter((n) =>
-    player?.discoveredNpcs.includes(n.id),
+  const locationClues = worldBlueprint?.clues.filter(
+    (c) => c.locationId === player?.currentLocationId && !player?.discoveredClues.includes(c.id),
+  ) ?? []
+
+  const triggerableEvents = worldBlueprint?.events.filter((e) =>
+    evaluateTrigger(e.triggerCondition, player!) && e.locationId === player?.currentLocationId,
   ) ?? []
 
   const visibleRumors = worldBlueprint?.rumors.filter((r) =>
@@ -45,7 +58,14 @@ function ExplorePage() {
   ) ?? []
 
   function mergeState(base: PlayerState, update: Partial<PlayerState>): PlayerState {
-    return { ...base, ...update } as PlayerState
+    const merged = { ...base, ...update } as PlayerState
+    if (update.attributes) merged.attributes = { ...base.attributes, ...update.attributes }
+    if (update.discoveredClues) merged.discoveredClues = [...base.discoveredClues, ...update.discoveredClues.filter(id => !base.discoveredClues.includes(id))]
+    if (update.discoveredNpcs) merged.discoveredNpcs = [...base.discoveredNpcs, ...update.discoveredNpcs.filter(id => !base.discoveredNpcs.includes(id))]
+    if (update.discoveredLocations) merged.discoveredLocations = [...base.discoveredLocations, ...update.discoveredLocations.filter(id => !base.discoveredLocations.includes(id))]
+    if (update.discoveredRumors) merged.discoveredRumors = [...base.discoveredRumors, ...update.discoveredRumors.filter(id => !base.discoveredRumors.includes(id))]
+    if (update.relationships) merged.relationships = { ...base.relationships, ...update.relationships }
+    return merged
   }
 
   const handleNextYear = async () => {
@@ -59,12 +79,18 @@ function ExplorePage() {
       setCurrentYear(merged.age)
       addJournalEntries(update.journalEntries)
 
-      const annualEvent = update.events.find((e) => e.eventType === 'annual')
-      if (annualEvent) {
-        const matching = locationEvents.find((es) =>
-          es.triggerCondition.includes('age') || es.locationId === merged.currentLocationId,
-        )
-        if (matching) setActiveEvent(matching)
+      if (update.hints && update.hints.length > 0) {
+        setBreakthroughHint(update.hints[0])
+      } else {
+        setBreakthroughHint(null)
+      }
+
+      const triggerable = worldBlueprint!.events.filter((e) =>
+        evaluateTrigger(e.triggerCondition, merged) && e.locationId === merged.currentLocationId,
+      )
+
+      if (triggerable.length > 0) {
+        setActiveEvent(triggerable[0])
       }
 
       if (merged.age >= merged.lifespan) {
@@ -75,7 +101,6 @@ function ExplorePage() {
         const endings = await checkEndings(sessionId)
         if (endings.length > 0) setAvailableEndings(endings)
       } catch {
-        // endings check is non-blocking
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '推进失败')
@@ -100,14 +125,28 @@ function ExplorePage() {
     }
   }
 
-  const handleDiscover = async () => {
+  const handleDiscoverClue = async (clueId: string) => {
     if (!sessionId || !player) return
     setError(null)
     setIsActing(true)
     try {
-      const update = await applyAction(sessionId, 'discover', {
-        clueId: currentLocation?.id,
-      }, currentYear)
+      const update = await applyAction(sessionId, 'discover', { clueId }, currentYear)
+      const merged = mergeState(player, update.newState)
+      setPlayer(merged)
+      addJournalEntries(update.journalEntries)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '探索失败')
+    } finally {
+      setIsActing(false)
+    }
+  }
+
+  const handleDiscoverRumor = async (rumorId: string) => {
+    if (!sessionId || !player) return
+    setError(null)
+    setIsActing(true)
+    try {
+      const update = await applyAction(sessionId, 'discover', { rumorId }, currentYear)
       const merged = mergeState(player, update.newState)
       setPlayer(merged)
       addJournalEntries(update.journalEntries)
@@ -164,8 +203,37 @@ function ExplorePage() {
       setPlayer(merged)
       addJournalEntries(update.journalEntries)
       setActiveEvent(null)
+
+      await applyAction(sessionId, 'resolve_event', {}, currentYear)
     } catch (err) {
       setError(err instanceof Error ? err.message : '选择失败')
+    }
+  }
+
+  const handleBreakthrough = async () => {
+    if (!sessionId || !player) return
+    setError(null)
+    setIsActing(true)
+    setBreakthroughHint(null)
+    try {
+      const update = await applyAction(sessionId, 'attempt_breakthrough', {}, currentYear)
+      const merged = mergeState(player, update.newState)
+      setPlayer(merged)
+      addJournalEntries(update.journalEntries)
+
+      if (update.hints && update.hints.length > 0) {
+        setError(update.hints[0])
+      }
+
+      try {
+        const endings = await checkEndings(sessionId)
+        if (endings.length > 0) setAvailableEndings(endings)
+      } catch {
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '破境失败')
+    } finally {
+      setIsActing(false)
     }
   }
 
@@ -201,7 +269,6 @@ function ExplorePage() {
             <p className="text-xs text-text-secondary">{currentLocation?.name ?? '未知'} · {worldBlueprint.worldProfile.name}</p>
           </div>
           <div className="flex gap-2">
-            <Link to="/dialogue"><Button variant="secondary" size="sm" className="gap-1"><MessageSquare className="w-4 h-4" />对话</Button></Link>
             <Link to="/journal"><Button variant="secondary" size="sm" className="gap-1"><Scroll className="w-4 h-4" />旅记</Button></Link>
           </div>
         </div>
@@ -210,6 +277,10 @@ function ExplorePage() {
       <main className="max-w-5xl mx-auto px-6 py-6">
         {error && (
           <div className="bg-accent-red border-3 border-border-primary shadow-nb p-3 mb-4 text-text-inverse font-mono text-sm">{error}</div>
+        )}
+
+        {breakthroughHint && (
+          <div className="bg-accent-cyan border-3 border-border-primary shadow-nb p-3 mb-4 text-text-primary font-mono text-sm">{breakthroughHint}</div>
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
@@ -232,11 +303,27 @@ function ExplorePage() {
                     {currentLocation.atmosphere && <Tag variant="default">{currentLocation.atmosphere}</Tag>}
                   </div>
                   <p className="text-text-primary leading-relaxed mb-4">{currentLocation.description}</p>
-                  <div className="font-mono text-sm font-bold text-text-secondary mb-2">可执行行动：</div>
+
+                  {locationClues.length > 0 && (
+                    <div className="mb-4">
+                      <div className="font-mono text-sm font-bold text-accent-cyan mb-2">可发现线索：</div>
+                      <div className="flex flex-wrap gap-2">
+                        {locationClues.map((clue) => (
+                          <Button key={clue.id} size="sm" variant="cyan"
+                            onClick={() => handleDiscoverClue(clue.id)} disabled={isActing}>
+                            {clue.name}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="secondary" onClick={handleInvestigate} disabled={isActing}>
+                      <MapPin className="w-4 h-4" />调查此地
+                    </Button>
                     {currentLocation.exploreActions.map((a) => (
-                      <Button key={a} size="sm" variant="secondary"
-                        onClick={handleDiscover} disabled={isActing}>
+                      <Button key={a} size="sm" variant="secondary" onClick={handleInvestigate} disabled={isActing}>
                         {a}
                       </Button>
                     ))}
@@ -270,15 +357,14 @@ function ExplorePage() {
               </Panel>
             )}
 
-            {!activeEvent && locationEvents.length > 0 && (
+            {!activeEvent && triggerableEvents.length > 0 && (
               <Panel title="此地事件" titleBg="purple">
                 <div className="space-y-2">
-                  {locationEvents.filter((e) => e.oneTime ? !player.discoveredLocations.includes(e.locationId) : true).map((e) => (
+                  {triggerableEvents.filter((e) => e.oneTime ? !player.discoveredClues.includes(e.id) : true).map((e) => (
                     <div key={e.id}
                       onClick={() => setActiveEvent(e)}
                       className="bg-bg-card border-3 border-border-primary shadow-nb p-3 cursor-pointer hover:shadow-nb-lg transition-all">
                       <span className="font-mono font-bold text-sm">{e.description}</span>
-                      <p className="text-xs text-text-secondary mt-1">{e.triggerCondition}</p>
                     </div>
                   ))}
                 </div>
@@ -294,12 +380,12 @@ function ExplorePage() {
                   {isAdvancing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Calendar className="w-5 h-5" />}
                   {isAdvancing ? 'AI 推演中...' : '下一年'}
                 </Button>
-                <p className="font-mono text-xs text-text-secondary mt-2">推进时间，AI 生成年度事件</p>
+                <p className="font-mono text-xs text-text-secondary mt-2">推进时间，属性自然增长</p>
               </div>
             </Card>
 
-            <Button variant="cyan" fullWidth className="gap-2" onClick={handleInvestigate} disabled={isActing}>
-              <MapPin className="w-4 h-4" />调查此地
+            <Button variant="cyan" fullWidth className="gap-2" onClick={handleBreakthrough} disabled={isActing || !breakthroughHint}>
+              <Zap className="w-4 h-4" />尝试破境
             </Button>
 
             <Button variant="secondary" fullWidth className="gap-2" onClick={handleCheckEndings} disabled={isActing}>
@@ -324,7 +410,7 @@ function ExplorePage() {
 
             <Panel title="可见 NPC" titleBg="primary">
               {nearbyNpcs.length === 0 ? (
-                <p className="text-sm text-text-secondary">此处暂无已发现的 NPC</p>
+                <p className="text-sm text-text-secondary">此处暂无 NPC</p>
               ) : (
                 <div className="space-y-3">
                   {nearbyNpcs.map((npc) => (
@@ -355,6 +441,11 @@ function ExplorePage() {
                     <div key={r.id} className="bg-bg-card border-2 border-border-primary p-3 text-sm text-text-secondary">
                       {r.content}
                       <span className="text-xs ml-1">可信度: {Math.round(r.credibility * 100)}%</span>
+                      {!player.discoveredRumors.includes(r.id) && (
+                        <Button size="sm" variant="secondary" className="mt-1" onClick={() => handleDiscoverRumor(r.id)} disabled={isActing}>
+                          追踪此传闻
+                        </Button>
+                      )}
                     </div>
                   ))}
                 </div>

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import json
+from string import Template
+
 from pydantic_ai import Agent
 
 from app.dependencies import Settings
 from app.schemas.models import EndingCandidate, EndingGenerationRequest
 
-ENDING_GENERATION_PROMPT = """You are the Ending Arbiter for 变分无限 (Variational Infinity), a math-xianxia life-simulator game.
+ENDING_GENERATION_PROMPT = Template("""You are the Ending Arbiter for 变分无限 (Variational Infinity), a math-xianxia life-simulator game.
 
 Your task: Generate an ending candidate based on the player's accumulated evidence and life trajectory.
 
@@ -38,11 +41,11 @@ Your task: Generate an ending candidate based on the player's accumulated eviden
 - No "magic reset" endings — consequences are permanent
 
 Context:
-Discovered evidence: {discovered_evidence}
-Journey summary: {journey_summary}
-Player state: {player_state}
+Discovered evidence: $discovered_evidence
+Journey summary: $journey_summary
+Player state: $player_state
 
-Return ONLY the JSON object matching the EndingCandidate schema. No commentary."""
+Return ONLY the JSON object matching the EndingCandidate schema. No commentary.""")
 
 
 def _validate_llm_config(settings: Settings) -> None:
@@ -60,16 +63,16 @@ async def generate_ending_candidate(request: EndingGenerationRequest, settings: 
     agent = Agent(
         model=f"openai:{settings.llm_model}",
         output_type=EndingCandidate,
-        system_prompt=ENDING_GENERATION_PROMPT.format(
+        system_prompt=ENDING_GENERATION_PROMPT.substitute(
             discovered_evidence=", ".join(request.discovered_evidence),
             journey_summary=request.journey_summary,
-            player_state=str(request.player_state),
+            player_state=json.dumps(request.player_state),
         ),
     )
 
     result = await agent.run(
         f"Evaluate ending eligibility based on discovered evidence: {', '.join(request.discovered_evidence)}",
-        model_settings={"base_url": settings.llm_base_url, "api_key": settings.llm_api_key},
+        model_settings={"base_url": settings.llm_base_url, "api_key": settings.llm_api_key, "max_tokens": 4096},
     )
 
     return result.output

@@ -3,10 +3,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import { LlmService } from '../llm/llm.service';
 import { SafetyService } from '../safety/safety.service';
 import { AuditService } from '../audit/audit.service';
-import { PromptRegistry } from '@vi/ai';
+import { PromptRegistry } from '@variational-infinity/ai';
 import { z } from 'zod';
-import { WorldBlueprintSchema, PlayerStateSchema } from '@vi/shared';
-import type { WorldBlueprint, PlayerState, GenerationPreferences } from '@vi/shared';
+import { WorldBlueprintSchema, PlayerStateSchema } from '@variational-infinity/shared';
+import type { WorldBlueprint, PlayerState, GenerationPreferences } from '@variational-infinity/shared';
 
 @Injectable()
 export class GenerationService {
@@ -76,18 +76,6 @@ export class GenerationService {
     }
 
     try {
-      const blueprint = await this.prisma.worldBlueprint.create({
-        data: {
-          sessionId,
-          generationId: crypto.randomUUID(),
-          promptVersion: promptEntry.version,
-          model: result.model,
-          provider: result.provider,
-          seed: preferences.seed ?? 0,
-          data: data as object,
-        },
-      });
-
       const initialLocationId = data.locations[0]?.id ?? 'unknown';
       const defaultPlayerState: PlayerState = {
         name: '行者',
@@ -102,7 +90,7 @@ export class GenerationService {
           proof: 3,
           intuition: 5,
           focus: 10,
-          body: 20,
+          physique: 20,
           family: 10,
         },
         discoveredLocations: [initialLocationId],
@@ -115,13 +103,26 @@ export class GenerationService {
 
       PlayerStateSchema.parse(defaultPlayerState);
 
-      await this.prisma.gameState.create({
-        data: {
-          sessionId,
-          turn: 0,
-          data: defaultPlayerState as object,
-        },
-      });
+      const [blueprint] = await this.prisma.$transaction([
+        this.prisma.worldBlueprint.create({
+          data: {
+            sessionId,
+            generationId: crypto.randomUUID(),
+            promptVersion: promptEntry.version,
+            model: result.model,
+            provider: result.provider,
+            seed: preferences.seed ?? 0,
+            data: data as object,
+          },
+        }),
+        this.prisma.gameState.create({
+          data: {
+            sessionId,
+            turn: 0,
+            data: defaultPlayerState as object,
+          },
+        }),
+      ]);
 
       this.logger.log(`World generated and initial state created for session ${sessionId}`);
       return data;

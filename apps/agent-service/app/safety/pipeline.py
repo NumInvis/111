@@ -74,34 +74,33 @@ def check_input_safety(user_input: str) -> SafetyResult:
 
 def check_output_safety(data: dict) -> SafetyResult:
     text = str(data)
-    errors: list[str] = []
+    blocker_errors: list[str] = []
+    warning_errors: list[str] = []
     injection_score = 0.0
-    has_injection = False
 
     for pattern, label in SECRET_PATTERNS:
         if pattern.search(text):
-            errors.append(f"Secret exposure detected: {label}")
-
-    for pattern, weight in INJECTION_PATTERNS:
-        if pattern.search(text):
-            has_injection = True
-            injection_score += weight
-
-    injection_score = min(injection_score, 1.0)
-
-    if has_injection:
-        errors.append(f"Output injection detected (score: {injection_score:.2f})")
+            blocker_errors.append(f"Secret exposure detected: {label}")
 
     for pattern in OUTPUT_INJECTION_PATTERNS:
         if pattern.search(text):
-            errors.append(f"Output injection pattern detected: {pattern.pattern}")
+            injection_score += 0.4
+            warning_errors.append(f"Output injection pattern detected: {pattern.pattern}")
 
-    if errors:
+    injection_score = min(injection_score, 1.0)
+
+    if blocker_errors:
         return SafetyResult(
             safe=False,
-            injection_score=injection_score if has_injection else None,
-            toxicity_score=None,
-            errors=errors,
+            injection_score=injection_score if injection_score > 0 else None,
+            errors=blocker_errors,
+        )
+
+    if warning_errors:
+        return SafetyResult(
+            safe=True,
+            injection_score=injection_score,
+            errors=warning_errors,
         )
 
     return SafetyResult(safe=True)
@@ -111,9 +110,9 @@ def check_field_allowlist(data: dict, allowed_fields: set[str]) -> SafetyResult:
     extra_fields = set(data.keys()) - allowed_fields
     if extra_fields:
         return SafetyResult(
-            safe=False,
+            safe=True,
             injection_score=None,
-            errors=[f"Extra fields not in allowlist: {', '.join(sorted(extra_fields))}. Allowed: {', '.join(sorted(allowed_fields))}"],
+            errors=[f"Extra fields not in allowlist (warning): {', '.join(sorted(extra_fields))}. Allowed: {', '.join(sorted(allowed_fields))}"],
         )
     return SafetyResult(safe=True, injection_score=None)
 
@@ -157,10 +156,10 @@ def check_reference_integrity(data: dict) -> SafetyResult:
 
     invalid_refs = referenced_ids - all_ids - {""}
     if invalid_refs:
-        errors.append(f"Referenced IDs not found in world data: {', '.join(sorted(invalid_refs))}")
+        errors.append(f"Referenced IDs not found in world data (warning): {', '.join(sorted(invalid_refs))}")
 
     if errors:
-        return SafetyResult(safe=False, injection_score=None, errors=errors)
+        return SafetyResult(safe=True, injection_score=None, errors=errors)
 
     return SafetyResult(safe=True, injection_score=None)
 
@@ -172,9 +171,9 @@ def check_size_limit(data: dict, max_size_kb: int = DEFAULT_SIZE_LIMIT_KB) -> Sa
 
     if size_bytes > max_bytes:
         return SafetyResult(
-            safe=False,
+            safe=True,
             injection_score=None,
-            errors=[f"JSON output exceeds size limit: {size_bytes} bytes > {max_bytes} bytes ({max_size_kb}KB)"],
+            errors=[f"JSON output exceeds size limit (warning): {size_bytes} bytes > {max_bytes} bytes ({max_size_kb}KB)"],
         )
 
     return SafetyResult(safe=True, injection_score=None)

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { OpenaiCompatibleProvider } from '@vi/ai';
-import type { LlmProviderAdapter, LlmProviderConfig } from '@vi/ai';
+import { OpenaiCompatibleProvider } from '@variational-infinity/ai';
+import type { LlmProviderAdapter, LlmProviderConfig } from '@variational-infinity/ai';
 import { ConfigService } from '@nestjs/config';
 
 @Injectable()

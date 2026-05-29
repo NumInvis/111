@@ -6,7 +6,7 @@ import {
   ReferenceIntegrityPipeline,
   SizeLimitPipeline,
   type SafetyCheckResult,
-} from '@vi/ai';
+} from '@variational-infinity/ai';
 
 @Injectable()
 export class SafetyService {
@@ -47,50 +47,77 @@ export class SafetyService {
     maxSizeKB?: number,
     references?: { locationIds?: string[]; npcIds?: string[]; factionIds?: string[] },
   ): SafetyCheckResult {
-    const allErrors: string[] = [];
-    let overallSafe = true;
+    const blockers: string[] = [];
+    const warnings: string[] = [];
     let injectionScore: number | undefined;
     let toxicityScore: number | undefined;
 
     const outputCheck = this.checkOutput(JSON.stringify(data));
     if (!outputCheck.safe) {
-      overallSafe = false;
-      if (outputCheck.errors) allErrors.push(...outputCheck.errors);
+      if (outputCheck.severity === 'blocker') {
+        blockers.push(...(outputCheck.errors ?? []));
+      } else {
+        warnings.push(...(outputCheck.errors ?? []));
+      }
       injectionScore = outputCheck.injectionScore;
       toxicityScore = outputCheck.toxicityScore;
+    } else if (outputCheck.errors && outputCheck.errors.length > 0) {
+      warnings.push(...outputCheck.errors);
     }
 
     if (allowedFields && typeof data === 'object' && data !== null) {
       const allowlistCheck = this.checkFieldAllowlist(data as Record<string, unknown>, allowedFields);
       if (!allowlistCheck.safe) {
-        overallSafe = false;
-        if (allowlistCheck.errors) allErrors.push(...allowlistCheck.errors);
+        if (allowlistCheck.severity === 'blocker') {
+          blockers.push(...(allowlistCheck.errors ?? []));
+        } else {
+          warnings.push(...(allowlistCheck.errors ?? []));
+        }
       }
     }
 
     if (references) {
       const refCheck = this.checkReferenceIntegrity(data, references);
       if (!refCheck.safe) {
-        overallSafe = false;
-        if (refCheck.errors) allErrors.push(...refCheck.errors);
+        if (refCheck.severity === 'blocker') {
+          blockers.push(...(refCheck.errors ?? []));
+        } else {
+          warnings.push(...(refCheck.errors ?? []));
+        }
       }
     }
 
     const sizeCheck = this.checkSizeLimit(data, maxSizeKB);
     if (!sizeCheck.safe) {
-      overallSafe = false;
-      if (sizeCheck.errors) allErrors.push(...sizeCheck.errors);
+      if (sizeCheck.severity === 'blocker') {
+        blockers.push(...(sizeCheck.errors ?? []));
+      } else {
+        warnings.push(...(sizeCheck.errors ?? []));
+      }
     }
 
-    if (!overallSafe) {
-      this.logger.warn(`Full safety check failed: ${allErrors.join('; ')}`);
+    if (blockers.length > 0) {
+      this.logger.error(`Safety blockers: ${blockers.join('; ')}`);
+      return {
+        safe: false,
+        severity: 'blocker',
+        injectionScore,
+        toxicityScore,
+        errors: blockers,
+      };
     }
 
-    return {
-      safe: overallSafe,
-      injectionScore,
-      toxicityScore,
-      errors: allErrors.length > 0 ? allErrors : undefined,
-    };
+    if (warnings.length > 0) {
+      this.logger.warn(`Safety warnings: ${warnings.join('; ')}`);
+      return {
+        safe: true,
+        severity: 'warning',
+        injectionScore,
+        toxicityScore,
+        errors: warnings,
+      };
+    }
+
+    return { safe: true };
   }
 }

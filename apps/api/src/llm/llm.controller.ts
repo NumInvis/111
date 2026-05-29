@@ -1,6 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
 import { LlmService } from './llm.service';
-import type { ApiResponse, LlmProviderInfo } from '@vi/shared';
+import type { ApiResponse, LlmProviderInfo } from '@variational-infinity/shared';
 
 @Controller('llm')
 export class LlmController {

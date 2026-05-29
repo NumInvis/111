@@ -6,7 +6,7 @@ import { Tag } from '@/components/ui/Tag'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowLeft, Send, User, Bot, Scroll, Loader2 } from 'lucide-react'
 import { useGameStore } from '@/stores/gameStore'
-import { startDialogue, sendDialogueMessage } from '@/lib/api'
+import { startDialogue, sendDialogueMessage, applyAction } from '@/lib/api'
 import type { DialogueMessage } from '@/types'
 
 export const Route = createFileRoute('/dialogue')({
@@ -85,20 +85,24 @@ function DialoguePage() {
       }
       addMessage(activeNpc.id, npcMsg)
 
-      if (reply.trustChange !== 0 && player.relationships[activeNpc.id]) {
-        const currentTrust = player.relationships[activeNpc.id].trust
-        const newTrust = Math.max(0, Math.min(1, currentTrust + reply.trustChange))
-        useGameStore.getState().setPlayer({
-          ...player,
-          relationships: {
-            ...player.relationships,
-            [activeNpc.id]: {
-              ...player.relationships[activeNpc.id],
-              trust: newTrust,
-              lastInteractionTurn: player.age,
+      if (reply.trustChange !== 0) {
+        setAccumulatedTrustChange((prev) => prev + reply.trustChange)
+        const currentRel = player.relationships[activeNpc.id]
+        if (currentRel) {
+          const currentTrust = currentRel.trust
+          const newTrust = Math.max(0, Math.min(1, currentTrust + reply.trustChange))
+          useGameStore.getState().setPlayer({
+            ...player,
+            relationships: {
+              ...player.relationships,
+              [activeNpc.id]: {
+                ...player.relationships[activeNpc.id],
+                trust: newTrust,
+                lastInteractionTurn: player.age,
+              },
             },
-          },
-        } as import('@/types').PlayerState)
+          } as import('@/types').PlayerState)
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '对话失败')
@@ -114,7 +118,19 @@ function DialoguePage() {
     }
   }
 
-  const handleBackToExplore = () => {
+  const [accumulatedTrustChange, setAccumulatedTrustChange] = useState(0)
+
+  const handleBackToExplore = async () => {
+    if (sessionId && activeNpc) {
+      try {
+        await applyAction(sessionId, 'end_dialogue', {
+          npcId: activeNpc.id,
+          trustChange: accumulatedTrustChange,
+        }, player?.age ?? 0)
+      } catch {
+      }
+    }
+    setAccumulatedTrustChange(0)
     setPhase('exploring')
   }
 

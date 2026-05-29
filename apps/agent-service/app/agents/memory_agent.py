@@ -75,7 +75,7 @@ async def summarize_memory(raw_content: str, npc_id: str, settings: Settings) ->
 
     result = await agent.run(
         f"Compress the following content into memory entries for NPC {npc_id}: {raw_content}",
-        model_settings={"base_url": settings.llm_base_url, "api_key": settings.llm_api_key},
+        model_settings={"base_url": settings.llm_base_url, "api_key": settings.llm_api_key, "max_tokens": 4096},
     )
 
     now = datetime.now(timezone.utc).isoformat()

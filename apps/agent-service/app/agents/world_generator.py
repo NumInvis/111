@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from string import Template
+
 from pydantic_ai import Agent
 
 from app.dependencies import Settings
 from app.schemas.models import GenerationPreferences, WorldBlueprint
 
-WORLD_GENERATION_PROMPT = """You are the World Architect for 变分无限 (Variational Infinity), a math-xianxia life-simulator game.
+WORLD_GENERATION_PROMPT = Template("""You are the World Architect for 变分无限 (Variational Infinity), a math-xianxia life-simulator game.
 
 Your task: Generate a complete World Blueprint JSON that defines an entire world for the player to explore over their lifetime.
 
@@ -35,7 +37,7 @@ The cultivation hierarchy uses exactly these 14 realm IDs and names, ordered fro
 - proof (证明): Logical proof and deductive reasoning
 - intuition (直觉): Mathematical intuition and insight
 - focus (专注): Concentration and mental endurance
-- body (体魄): Physical health and vitality
+- physique (体魄): Physical health and vitality
 - family (家世): Family background and social resources
 
 Each attribute ranges 0-100. Cultivation tiers define minimum thresholds per attribute for advancement.
@@ -52,16 +54,17 @@ You MUST produce valid JSON matching the WorldBlueprint schema. Include:
 - factions: 2-5 factions, each with mathematicalDoctrine
 - locations: 3-7, each with connections, riskLevel, exploreActions (1-4)
 - npcs: 3-7, each with personality (2-5 traits), goal, secret, forbiddenTopics, dialogueStyle, trustLevel
+- clues: 3-15, each with name, description, category, optional locationId/npcId/relatedEndingIds
 - rumors: 2-10, each with credibility and optional relatedLocation/relatedNpc
 - events: 3-8, each with 2-4 options, each option having attributeEffects and optional requiresRealm
 - endingCandidates: 2-5, each with requiredEvidence (clue IDs), requiredRealm (optional), tone
 
-Theme: {theme}
-Scale: {scale}
-Tone: {tone}
-Seed: {seed}
+Theme: $theme
+Scale: $scale
+Tone: $tone
+Seed: $seed
 
-Return ONLY the JSON object. No commentary, no explanation."""
+Return ONLY the JSON object. No commentary, no explanation.""")
 
 
 def _validate_llm_config(settings: Settings) -> None:
@@ -79,17 +82,17 @@ async def generate_world(preferences: GenerationPreferences, settings: Settings)
     agent = Agent(
         model=f"openai:{settings.llm_model}",
         output_type=WorldBlueprint,
-        system_prompt=WORLD_GENERATION_PROMPT.format(
+        system_prompt=WORLD_GENERATION_PROMPT.substitute(
             theme=preferences.theme,
             scale=preferences.scale,
             tone=preferences.tone,
-            seed=preferences.seed or "none",
+            seed=str(preferences.seed or "none"),
         ),
     )
 
     result = await agent.run(
         f"Generate a world blueprint for theme '{preferences.theme}', scale '{preferences.scale}', tone '{preferences.tone}'.",
-        model_settings={"base_url": settings.llm_base_url, "api_key": settings.llm_api_key},
+        model_settings={"base_url": settings.llm_base_url, "api_key": settings.llm_api_key, "max_tokens": 4096},
     )
 
     return result.output

@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ProviderRegistry } from '@vi/ai';
-import type { LlmProviderAdapter } from '@vi/ai';
+import { ProviderRegistry } from '@variational-infinity/ai';
+import type { LlmProviderAdapter } from '@variational-infinity/ai';
 
 @Injectable()
 export class ProviderRegistryWrapper implements OnModuleInit {

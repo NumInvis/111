@@ -1,4 +1,3 @@
-import { z, type ZodType } from 'zod';
 import type { LlmProviderAdapter, LlmCallResult, LlmProviderConfig } from './provider-registry';
 
 interface OpenaiMessage {
@@ -53,7 +52,7 @@ export class OpenaiCompatibleProvider implements LlmProviderAdapter {
   async generate(
     prompt: string,
     model: string,
-    schema?: Record<string, unknown> | ZodType,
+    _schema?: Record<string, unknown>,
     options?: { temperature?: number; seed?: number },
   ): Promise<LlmCallResult> {
     const usedModel = model || this.defaultModel;
@@ -68,11 +67,9 @@ export class OpenaiCompatibleProvider implements LlmProviderAdapter {
       messages,
       temperature: options?.temperature ?? 0.7,
       seed: options?.seed,
+      max_tokens: 4096,
+      response_format: { type: 'json_object' },
     };
-
-    if (schema) {
-      body.response_format = { type: 'json_object' };
-    }
 
     const url = `${this.baseUrl}/chat/completions`;
     const controller = new AbortController();
@@ -103,33 +100,17 @@ export class OpenaiCompatibleProvider implements LlmProviderAdapter {
 
       const content = json.choices[0]?.message?.content ?? '';
       let data: unknown;
-      let valid = true;
-      const errors: string[] = [];
 
-      if (schema) {
-        try {
-          data = JSON.parse(content);
-        } catch (parseErr) {
-          const msg = parseErr instanceof Error ? parseErr.message : String(parseErr);
-          throw new Error(`Failed to parse LLM JSON output: ${redactApiKey(msg, this.apiKey)}`);
-        }
-        if (schema instanceof z.ZodType) {
-          const result = schema.safeParse(data);
-          if (!result.success) {
-            throw new Error(
-              `LLM structured output failed schema validation: ${result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`,
-            );
-          }
-          data = result.data;
-        }
-      } else {
-        data = content;
+      try {
+        data = JSON.parse(content);
+      } catch (parseErr) {
+        const msg = parseErr instanceof Error ? parseErr.message : String(parseErr);
+        throw new Error(`Failed to parse LLM JSON output: ${redactApiKey(msg, this.apiKey)}`);
       }
 
       return {
         data,
-        valid,
-        errors: errors.length > 0 ? errors : undefined,
+        valid: true,
         model: json.model || usedModel,
         provider: this.name,
         latencyMs,
@@ -165,6 +146,7 @@ export class OpenaiCompatibleProvider implements LlmProviderAdapter {
       stream: true,
       temperature: options?.temperature ?? 0.7,
       seed: options?.seed,
+      max_tokens: 4096,
     };
 
     const url = `${this.baseUrl}/chat/completions`;

@@ -1,6 +1,5 @@
 export {
   GameStateMachine,
-  endingArbitrator,
   REALM_ORDER,
   realmOrder,
   type GamePhase,

@@ -1,5 +1,18 @@
 import { z } from 'zod';
 
+export const AttributeNameEnum = z.enum([
+  'calculation',
+  'geometry',
+  'abstraction',
+  'proof',
+  'intuition',
+  'focus',
+  'physique',
+  'family',
+]);
+
+export type AttributeName = z.infer<typeof AttributeNameEnum>;
+
 export const CultivationPathSchema = z.object({
   id: z.string().describe('Unique identifier for the cultivation path'),
   name: z.string().describe('Display name of the cultivation path'),
@@ -21,7 +34,8 @@ export const LegendaryFigureSchema = z.object({
   id: z.string().describe('Unique identifier for the legendary figure'),
   name: z.string().describe('Display name of the legendary figure'),
   realm: z.string().describe('The cultivation realm this figure has achieved'),
-  backstory: z.string().describe('Brief backstory or legend associated with this figure'),
+  legend: z.string().describe('Brief legend or story associated with this figure'),
+  mathematicalContribution: z.string().optional().describe('Optional mathematical contribution this figure is known for'),
 });
 
 export type LegendaryFigure = z.infer<typeof LegendaryFigureSchema>;
@@ -98,12 +112,22 @@ export const RumorSchema = z.object({
 
 export type Rumor = z.infer<typeof RumorSchema>;
 
+export const TriggerConditionSchema = z.object({
+  minRealm: z.string().optional().describe('Minimum realm ID required for this event to trigger'),
+  minAge: z.number().optional().describe('Minimum player age required for this event to trigger'),
+  locationId: z.string().optional().describe('Location ID where this event must take place'),
+  discoveredNpcId: z.string().optional().describe('NPC ID that must have been discovered for this event to trigger'),
+  discoveredClueId: z.string().optional().describe('Clue ID that must have been discovered for this event to trigger'),
+});
+
+export type TriggerCondition = z.infer<typeof TriggerConditionSchema>;
+
 export const EventOptionSchema = z.object({
   label: z.string().describe('Short label for the choice option'),
   description: z.string().describe('Detailed description of what this choice entails'),
   riskLevel: RiskLevelEnum.optional().describe('Optional risk level associated with choosing this option'),
   consequenceHint: z.string().describe('Brief hint about potential consequences of this choice'),
-  attributeEffects: z.record(z.string(), z.number()).optional().describe('Optional attribute name to numeric effect mapping'),
+  attributeEffects: z.record(AttributeNameEnum, z.number().min(-15).max(15)).optional().describe('Optional attribute name to numeric effect mapping (-15 to +15)'),
   requiresRealm: z.string().optional().describe('Optional realm ID required to be eligible for this option'),
 });
 
@@ -111,7 +135,7 @@ export type EventOption = z.infer<typeof EventOptionSchema>;
 
 export const EventSeedSchema = z.object({
   id: z.string().describe('Unique identifier for the event seed'),
-  triggerCondition: z.string().describe('Condition description for when this event triggers'),
+  triggerCondition: TriggerConditionSchema.describe('Structured condition for when this event triggers'),
   locationId: z.string().describe('Location ID where this event takes place'),
   description: z.string().describe('Narrative description of the event scenario'),
   options: z.array(EventOptionSchema).min(2).max(4).describe('Available choices for the player (2-4 options)'),
@@ -120,6 +144,18 @@ export const EventSeedSchema = z.object({
 });
 
 export type EventSeed = z.infer<typeof EventSeedSchema>;
+
+export const ClueSchema = z.object({
+  id: z.string().describe('Unique identifier for the clue'),
+  name: z.string().describe('Display name of the clue'),
+  description: z.string().describe('Description of what this clue reveals or hints at'),
+  locationId: z.string().optional().describe('Optional location ID where this clue can be found'),
+  npcId: z.string().optional().describe('Optional NPC ID whose secret relates to this clue'),
+  category: z.enum(['evidence', 'rumor_clue', 'investigation', 'dialogue_hint', 'breakthrough_insight']).describe('Category of the clue'),
+  relatedEndingIds: z.array(z.string()).optional().describe('Optional ending candidate IDs this clue serves as evidence for'),
+});
+
+export type Clue = z.infer<typeof ClueSchema>;
 
 export const EndingCandidateSchema = z.object({
   id: z.string().describe('Unique identifier for the ending candidate'),
@@ -177,6 +213,7 @@ export const WorldBlueprintSchema = z.object({
   factions: z.array(FactionSchema).min(2).max(5).describe('Factions in this world (2-5)'),
   locations: z.array(LocationSchema).min(3).max(7).describe('Explorable locations in this world (3-7)'),
   npcs: z.array(NpcSeedSchema).min(3).max(7).describe('NPCs populating this world (3-7)'),
+  clues: z.array(ClueSchema).min(3).max(15).describe('Clues/evidence discoverable in this world (3-15)'),
   rumors: z.array(RumorSchema).min(2).max(10).describe('Rumors circulating in this world (2-10)'),
   events: z.array(EventSeedSchema).min(3).max(8).describe('Event seeds that may trigger during play (3-8)'),
   endingCandidates: z.array(EndingCandidateSchema).min(2).max(5).describe('Possible endings the player may reach (2-5)'),

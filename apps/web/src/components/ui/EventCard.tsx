@@ -13,7 +13,7 @@ export function EventCard({ event, onSelectOption }: EventCardProps) {
         <span className="font-mono text-sm opacity-80">地点: {event.locationId}</span>
       </div>
       <div className="p-6">
-        <p className="text-text-primary leading-relaxed mb-6 text-base">{event.triggerCondition}</p>
+        <p className="text-text-primary leading-relaxed mb-6 text-base">{event.description}</p>
         <div className="space-y-3">
           <div className="font-mono text-sm font-bold text-text-secondary mb-2">选择你的行动：</div>
           {event.options.map((opt, idx) => (

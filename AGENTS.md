@@ -23,13 +23,13 @@ pnpm dev:api                    # NestJS API (nest watch, port 3000)
 pnpm dev:agent                  # Python Agent Service (uvicorn, port 8000)
 pnpm build                      # build all packages
 pnpm typecheck                  # TypeScript check all packages
-pnpm test                       # run all tests (currently none exist)
+pnpm test                       # run all tests
 pnpm db:generate                # generate Prisma client
 pnpm db:push                    # push Prisma schema to PostgreSQL
 pnpm db:migrate                 # create + run migration
 ```
 
-Prerequisites: PostgreSQL must be running at `DATABASE_URL` before `db:push`/`db:migrate`. No Docker Compose exists — start Postgres manually. The API crashes on startup if `AI_BASE_URL` is empty — `.env.local` must have real LLM provider config (no `mock` provider exists).
+Prerequisites: PostgreSQL must be running at `DATABASE_URL` before `db:push`/`db:migrate`. Use `docker compose up -d` to start Postgres from the root `docker-compose.yml` (user `vi`, password `vi_local_dev`, db `variational_infinity`). The API crashes on startup if `AI_BASE_URL` is empty — `.env.local` must have real LLM provider config (no `mock` provider exists).
 
 ---
 
@@ -37,22 +37,22 @@ Prerequisites: PostgreSQL must be running at `DATABASE_URL` before `db:push`/`db
 
 | Package | `package.json` name | Path alias | Has real code? |
 |---------|---------------------|------------|---------------|
-| `apps/api` | `@variational-infinity/api` | `@vi/shared`, `@vi/ai`, `@vi/game-engine`, `@vi/observability` | Yes — NestJS with 6 modules |
+| `apps/api` | `@variational-infinity/api` | `@vi/shared`, `@vi/ai`, `@vi/game-engine`, `@vi/observability` | Yes — NestJS with 8 modules |
 | `apps/web` | `@mythweaver/web` | `@/*` → `src/*` | Yes — React 19, Zustand, TanStack Router |
 | `apps/agent-service` | (Python — `pyproject.toml`) | — | Yes — FastAPI, 5 Pydantic AI agents |
 | `packages/shared` | `@variational-infinity/shared` | — | Yes — Zod schemas + API types |
 | `packages/ai` | `@variational-infinity/ai` | — | Yes — ProviderRegistry, PromptRegistry, 5 safety pipelines |
-| `packages/game-engine` | `@variational-infinity/game-engine` | — | Yes — state machine, 7 reducers, 4 rule checkers |
+| `packages/game-engine` | `@variational-infinity/game-engine` | — | Yes — state machine, reducers, rule checkers |
 | `packages/observability` | `@variational-infinity/observability` | — | Yes — createTraceId, formatLatency, AuditContext |
 
 ---
 
 ## API (NestJS)
 
-**Entry**: `apps/api/src/main.ts` — global prefix `/api`, port from `PORT` env (default 3000), bare CORS (`enableCors()` with no options).
+**Entry**: `apps/api/src/main.ts` — global prefix `/api`, port from `PORT` env (default 3000), CORS restricted to `localhost:16543` and `localhost:3000`.
 
 **Modules** (registered in `AppModule`):
-- `ConfigModule` (isGlobal), `PrismaModule`, `LlmModule`, `SafetyModule`, `AuditModule`, `GenerationModule`, `GameModule`
+- `ConfigModule` (isGlobal), `PrismaModule`, `LlmModule`, `SafetyModule`, `AuditModule`, `GenerationModule`, `GameModule`, `AgentBridgeModule`
 
 **Controllers and routes** (all under `/api/` prefix):
 
@@ -64,8 +64,13 @@ Prerequisites: PostgreSQL must be running at `DATABASE_URL` before `db:push`/`db
 | `/api/game/sessions/:id/next-year` | POST | GameController — advance year |
 | `/api/game/sessions/:id/state` | GET | GameController — get player state |
 | `/api/game/sessions/:id/endings` | GET | GameController — check endings |
+| `/api/game/sessions/:id/trigger-ending` | POST | GameController — trigger ending |
 | `/api/game/sessions/:id/end` | POST | GameController — end session |
 | `/api/game/sessions/:id/dialogue` | POST | GameController — start dialogue |
+| `/api/game/sessions/:id/dialogue/message` | POST | GameController — send dialogue message |
+| `/api/game/sessions/:id/agent-memory` | GET | GameController — get agent memory |
+| `/api/game/sessions/:id/agent-memory` | POST | GameController — store agent memory |
+| `/api/game/sessions/:id/trace` | GET | GameController — get game trace |
 | `/api/generation/world/:sessionId` | POST | GenerationController — generate world |
 | `/api/generation/world/:sessionId` | GET | GenerationController — get blueprint |
 | `/api/llm/providers` | GET | LlmController — provider info |
@@ -86,6 +91,7 @@ Prerequisites: PostgreSQL must be running at `DATABASE_URL` before `db:push`/`db
 - Uses a local `ProviderRegistryWrapper` (not directly `@vi/ai`'s `ProviderRegistry`)
 - `onModuleInit()` throws if `AI_BASE_URL` is missing — no mock provider registered
 - `generateWithSchema()`: calls provider → `safeParse` → single `attemptAutoRepair` → throws on failure
+- Retries on 429/502/503 and network errors with exponential backoff (default 3 retries)
 - Only provider file: `apps/api/src/llm/providers/openai-compatible.provider.ts` (NestJS `@Injectable()` wrapper around `@vi/ai`'s `OpenaiCompatibleProvider`)
 - Real implementation: `packages/ai/src/providers/openai-compatible.ts` — fetch-based, 30s/60s timeout, SSE streaming, API key redaction
 
@@ -98,9 +104,10 @@ Prerequisites: PostgreSQL must be running at `DATABASE_URL` before `db:push`/`db
 - Throws `Error` on safety check failure — NO fallback blueprint. Do not add one.
 
 **GameService** (`apps/api/src/game/game.service.ts`):
-- Imports and uses `GameStateMachine`, `ActionValidator`, `EndingArbitrator`, `RealmAdvancementChecker`, and all reducers from `@vi/game-engine`
-- Valid actions: `move`, `talk`, `next_year`, `discover`, `investigate`, `rest`, `trade`
+- Imports and uses `GameStateMachine`, `ActionValidator`, `EndingArbitrator`, `RealmAdvancementChecker`, and reducers from `@vi/game-engine`
+- Valid actions: `move`, `talk`, `next_year`, `discover`, `investigate`, `event_choice`, `end_dialogue`, `resolve_event`, `attempt_breakthrough`
 - Initial player state: name='行者', age=16, realm='炼体', 8 attributes
+- `AgentBridgeService` delegates NPC dialogue and ending evaluation to the Python Agent Service when `USE_AGENT_BRIDGE=true` (default)
 
 ---
 
@@ -109,8 +116,9 @@ Prerequisites: PostgreSQL must be running at `DATABASE_URL` before `db:push`/`db
 - **GameStateMachine**: 7 phases (`initializing`, `exploring`, `dialoguing`, `event`, `ending_check`, `ended`, `death`), 10 transitions with conditions
 - **14 realms**: 炼体→练气→筑基→本元→通明→化神→归一→渡劫→天门→仙境→圣境→变分境→天道境→无限
 - **8 attributes**: 计算/几何/抽象/证明/直觉/专注/体魄/家世 (0–100)
-- **7 reducers**: `move`, `talk`, `nextYear`, `discover`, `investigate`, `eventChoice`, `realmAdvancement` — each produces `JournalEntry` + `GameEvent`
-- **4 rule checkers**: `EndingArbitrator` (requiredEvidence + requiredRealm), `ActionValidator`, `StateBoundsChecker`, `RealmAdvancementChecker` (attribute thresholds per realm)
+- **Reducers**: `applyMoveAction`, `applyTalkAction`, `applyNextYearAction`, `applyDiscoverAction`, `applyInvestigateAction`, `applyEventChoiceAction`, `applyEndDialogueAction`, `applyResolveEventAction`, `applyAttemptBreakthroughAction` — each produces `JournalEntry` + `GameEvent`
+- **Rule checkers**: `EndingArbitrator` (requiredEvidence + requiredRealm), `ActionValidator`, `StateBoundsChecker`, `RealmAdvancementChecker` (attribute thresholds per realm)
+- **Tests exist**: `packages/game-engine/src/__tests__/reducers.test.ts`, `rules.test.ts` — run with `pnpm --filter @variational-infinity/game-engine test`
 
 ---
 
@@ -122,7 +130,7 @@ Prerequisites: PostgreSQL must be running at `DATABASE_URL` before `db:push`/`db
 
 **5 Pydantic AI agents**: `world_generator`, `npc_agent`, `event_agent`, `ending_director`, `memory_agent` — each raises `ValueError` if no LLM provider configured. No CrewAI or LangGraph — only `pydantic-ai`.
 
-**Env vars**: `AGENT_LLM_PROVIDER`, `AGENT_LLM_BASE_URL`, `AGENT_LLM_MODEL`, `AGENT_LLM_API_KEY` (separate from NestJS's `AI_*` vars). Also `AGENT_NESTJS_API_URL` for calling back to NestJS.
+**Env vars** (in `apps/agent-service/.env.example`): `AGENT_LLM_PROVIDER`, `AGENT_LLM_BASE_URL`, `AGENT_LLM_MODEL`, `AGENT_LLM_API_KEY` (separate from NestJS's `AI_*` vars). Also `AGENT_NESTJS_API_URL` for calling back to NestJS, `AGENT_DATABASE_URL` for direct DB access.
 
 **Run with**: `cd apps/agent-service && uv run uvicorn app.main:app --reload --port 8000`
 
@@ -134,13 +142,13 @@ Prerequisites: PostgreSQL must be running at `DATABASE_URL` before `db:push`/`db
 
 **Dev server**: port **16543** (not default 5173). Proxy `/api` → `http://localhost:3000`.
 
-**Routing**: TanStack Router file-based — auto-generates `routeTree.gen.ts`. Routes: `/` (index), `/world-gen`, `/explore`, `/dialogue`, `/journal`, `/ending`.
+**Routing**: TanStack Router file-based — auto-generates `routeTree.gen.ts` (gitignored). Routes: `/` (index), `/world-gen`, `/explore`, `/dialogue`, `/journal`, `/ending`, `/death`.
 
 **State**: Zustand store at `stores/gameStore.ts` — uses `immer` `produce` for immutable updates. Fields: `sessionId`, `preference`, `worldBlueprint`, `player`, `currentYear`, `journal`, `messages` (Record<string, DialogueMessage[]>), `activeEvent` (EventSeed), `availableEndings` (EndingCandidate[]), `phase` (GamePhase enum), `error`, `loading`.
 
-**API client**: `lib/api.ts` — real endpoints, no mock. Unwraps `ApiResponse<T>` wrapper (throws if `success` is false). Functions: `createSession`, `getSession`, `getGameState`, `applyAction`, `generateWorld`, `getWorldBlueprint`, `nextYear`, `startDialogue`, `checkEndings`, `endSession`, `getProviders`, `toGenPref` (converts UI mode names to GenerationScale/GenerationMode enums).
+**API client**: `lib/api.ts` — real endpoints, no mock. Unwraps `ApiResponse<T>` wrapper (throws if `success` is false).
 
-**Types**: `types/index.ts` — defines `REALMS` (14 names), `ATTRIBUTE_LABELS` (8 attribute key→Chinese name map), `WorldPreference`, `WorldBlueprint` (with `events`, `endingCandidates`, full `NpcSeed`/`EventSeed`/`EventOption`), `PlayerState` (8 attributes via `Attribute` interface, `currentLocationId`, `discoveredLocations/Npcs/Clues/Rumors`, `relationships`, `historySummary`), `JournalEntry` (with `category`, `evidenceTag`, `locationId`, `action`, `result`), `DialogueMessage`, `EndingCandidate`, `StateUpdate`, `ApiResponse<T>`, `GenerationPreferences`, `GenerationScale`, `GenerationMode`.
+**Types**: `types/index.ts` — defines `REALMS` (14 names), `ATTRIBUTE_LABELS` (8 attribute key→Chinese name map), `WorldPreference`, `WorldBlueprint`, `PlayerState`, `JournalEntry`, `DialogueMessage`, `EndingCandidate`, `StateUpdate`, `ApiResponse<T>`, `GenerationPreferences`, `GenerationScale`, `GenerationMode`.
 
 **UI components**: Neo Brutalism — `Button`, `Card`, `EventCard`, `NPCProfile`, `Panel`, `ProgressBar`, `StatusPanel`, `Tag`. Style: thick black borders (`border-3`), hard shadows (`4px 4px 0px #000`), gold/玄黑/赤/青/绿/紫 palette, `Space Mono` + `Noto Sans SC` fonts, zero rounded corners.
 
@@ -157,7 +165,7 @@ Prerequisites: PostgreSQL must be running at `DATABASE_URL` before `db:push`/`db
 
 ## Prisma Schema
 
-12 models: `User`, `GameSession`, `WorldBlueprint`, `GameState`, `DialogueMessage`, `WorldEvent`, `JournalEntry`, `AgentMemory`, `LlmCall`, `SafetyEvent`, `PromptVersion`, `ProviderConfig`. Database: `variational_infinity` on PostgreSQL.
+13 models: `User`, `GameSession`, `WorldBlueprint`, `GameState`, `DialogueMessage`, `WorldEvent`, `JournalEntry`, `AgentMemory`, `LlmCall`, `SafetyEvent`, `GameTrace`, `PromptVersion`, `ProviderConfig`. Database: `variational_infinity` on PostgreSQL.
 
 ---
 
@@ -185,6 +193,7 @@ All AI output must pass `fullOutputCheck()` before entering business logic.
 
 ## pnpm Workspace Gotchas
 
+- **`pnpm dev:web` is broken**: Root script filters `@variational-infinity/web` but the package is named `@mythweaver/web`. Fix: change to `pnpm --filter @mythweaver/web dev` or `pnpm --filter ./apps/web dev`.
 - `pnpm-workspace.yaml` `allowBuilds` has placeholder strings `"set this to true or false"` for several packages — these are not boolean values and will cause `pnpm approve-builds` to prompt interactively. Run `pnpm approve-builds` manually after `pnpm install`.
 - `onlyBuiltDependencies` in root `package.json` only lists `esbuild`. After adding new native deps, you may need to add them here or approve builds.
 - API `@nestjs/config` is **v4** (not v11) — different major version from `@nestjs/common`/`@nestjs/core` v11.
@@ -193,8 +202,6 @@ All AI output must pass `fullOutputCheck()` before entering business logic.
 
 ## What Doesn't Exist Yet
 
-- No tests (Vitest/Jest configured but zero test files)
-- No Docker Compose (start PostgreSQL manually)
 - No CI/CD
 - No Pino logger integration
 - No Redis/BullMQ usage in code

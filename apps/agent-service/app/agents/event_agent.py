@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import json
+from string import Template
+
 from pydantic_ai import Agent
 
 from app.dependencies import Settings
 from app.schemas.models import EventGenerationRequest, EventSeed
 
-EVENT_GENERATION_PROMPT = """You are the Event Engine for 变分无限 (Variational Infinity), a math-xianxia life-simulator game.
+EVENT_GENERATION_PROMPT = Template("""You are the Event Engine for 变分无限 (Variational Infinity), a math-xianxia life-simulator game.
 
 Your task: Generate an event with 2-3 meaningful choices that present REAL trade-offs for the player.
 
@@ -16,7 +19,7 @@ Your task: Generate an event with 2-3 meaningful choices that present REAL trade
 
 ### 8 Attributes
 - calculation (计算), geometry (几何), abstraction (抽象), proof (证明),
-- intuition (直觉), focus (专注), body (体魄), family (家世)
+- intuition (直觉), focus (专注), physique (体魄), family (家世)
 
 ## Event Generation Rules (MUST follow)
 
@@ -40,11 +43,11 @@ Events blend mathematical challenges with cultivation life:
 - A faction recruits you — membership grants resources but demands obedience
 
 Context:
-Player state: {player_state}
-Current location: {location_id}
-Discovered clues: {discovered_clues}
+Player state: $player_state
+Current location: $location_id
+Discovered clues: $discovered_clues
 
-Return ONLY the JSON object matching the EventSeed schema. No commentary."""
+Return ONLY the JSON object matching the EventSeed schema. No commentary.""")
 
 
 def _validate_llm_config(settings: Settings) -> None:
@@ -62,8 +65,8 @@ async def generate_event(request: EventGenerationRequest, settings: Settings) ->
     agent = Agent(
         model=f"openai:{settings.llm_model}",
         output_type=EventSeed,
-        system_prompt=EVENT_GENERATION_PROMPT.format(
-            player_state=str(request.player_state),
+        system_prompt=EVENT_GENERATION_PROMPT.substitute(
+            player_state=json.dumps(request.player_state),
             location_id=request.current_location_id,
             discovered_clues=", ".join(request.discovered_clues),
         ),
@@ -71,7 +74,7 @@ async def generate_event(request: EventGenerationRequest, settings: Settings) ->
 
     result = await agent.run(
         f"Generate an event at location '{request.current_location_id}' for this player state.",
-        model_settings={"base_url": settings.llm_base_url, "api_key": settings.llm_api_key},
+        model_settings={"base_url": settings.llm_base_url, "api_key": settings.llm_api_key, "max_tokens": 4096},
     )
 
     return result.output

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { RealmNameEnum } from './world-blueprint.schema';
+import { RealmNameEnum, AttributeNameEnum } from './world-blueprint.schema';
 
 export const AttributeSchema = z.object({
   calculation: z.number().min(0).max(100).describe('计算 — computational and arithmetic reasoning ability'),
@@ -8,7 +8,7 @@ export const AttributeSchema = z.object({
   proof: z.number().min(0).max(100).describe('证明 — logical proof and deductive reasoning ability'),
   intuition: z.number().min(0).max(100).describe('直觉 — mathematical intuition and insight ability'),
   focus: z.number().min(0).max(100).describe('专注 — concentration and mental endurance ability'),
-  body: z.number().min(0).max(100).describe('体魄 — physical health and vitality'),
+  physique: z.number().min(0).max(100).describe('体魄 — physical health and vitality'),
   family: z.number().min(0).max(100).describe('家世 — family background and social resources'),
 });
 
@@ -58,8 +58,9 @@ export const ActionTypeEnum = z.enum([
   'investigate',
   'event_choice',
   'next_year',
-  'rest',
-  'trade',
+  'end_dialogue',
+  'resolve_event',
+  'attempt_breakthrough',
 ]);
 
 export type ActionType = z.infer<typeof ActionTypeEnum>;
@@ -80,6 +81,7 @@ export const EventTypeEnum = z.enum([
   'relationship_change',
   'ending_candidate',
   'realm_breakthrough',
+  'breakthrough_failure',
   'death',
 ]);
 

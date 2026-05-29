@@ -40,7 +40,7 @@ The cultivation hierarchy uses exactly these 14 realm IDs and names, ordered fro
 - proof (证明): Logical proof and deductive reasoning
 - intuition (直觉): Mathematical intuition and insight
 - focus (专注): Concentration and mental endurance
-- body (体魄): Physical health and vitality
+- physique (体魄): Physical health and vitality
 - family (家世): Family background and social resources
 
 Each attribute ranges 0-100. Cultivation tiers define minimum thresholds per attribute for advancement.
@@ -64,6 +64,7 @@ You MUST produce valid JSON matching the WorldBlueprint schema. Include:
 
 Theme hint: {{theme}}
 Scale: {{scale}}
+Generation mode: {{mode}}
 Tone hint: {{tone}}
 Seed: {{seed}}
 
@@ -119,6 +120,7 @@ Rules for metadata:
 
 Player's current realm: {{playerRealm}}
 Player attributes: {{playerAttributes}}
+NPC memory of this player: {{npcMemorySummary}}
 Player's message: {{playerMessage}}`,
   },
   {
@@ -149,7 +151,7 @@ Every choice must have:
 
 ### Attribute Effects
 Each option must specify attributeEffects as a map of attribute name → numeric change (positive or negative).
-Attributes: calculation, geometry, abstraction, proof, intuition, focus, body, family
+Attributes: calculation, geometry, abstraction, proof, intuition, focus, physique, family
 Range per effect: -15 to +15 (significant but not overwhelming)
 
 ### Realm Requirements
@@ -333,7 +335,8 @@ export class PromptRegistry {
     const entry = this.get(name);
     let content = entry.content;
     for (const [key, value] of Object.entries(variables)) {
-      content = content.replaceAll(`{{${key}}}`, value);
+      const escapedValue = value.replace(/\{\{/g, '\\{\\{').replace(/\}\}/g, '\\}\\}');
+      content = content.replaceAll(`{{${key}}}`, escapedValue);
     }
     const unresolved = content.match(/\{\{[^}]+\}\}/g);
     if (unresolved) {

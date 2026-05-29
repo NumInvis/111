@@ -1,6 +1,5 @@
 export {
   GameStateMachine,
-  endingArbitrator,
   REALM_ORDER,
   realmOrder,
   type GamePhase,
@@ -14,6 +13,7 @@ export {
   StateBoundsChecker,
   RealmAdvancementChecker,
   type RuleCheckResult,
+  evaluateTriggerCondition,
   REALM_ADVANCEMENT_THRESHOLDS,
   REALM_NAMES_ORDERED,
 } from './rules/index';
@@ -25,6 +25,15 @@ export {
   applyDiscoverAction,
   applyInvestigateAction,
   applyEventChoiceAction,
+  applyEndDialogueAction,
+  applyResolveEventAction,
+  applyAttemptBreakthroughAction,
   applyRealmAdvancement,
   type StateUpdate,
 } from './reducers/index';
+
+export {
+  replayTrace,
+  type TraceEntry,
+  type ReplayResult,
+} from './harness/replay';

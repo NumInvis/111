@@ -16,3 +16,12 @@ export {
   SizeLimitPipeline,
   type SafetyCheckResult,
 } from './safety/index';
+
+export {
+  runAllSafetyFixtures,
+  runInputSafetyFixtures,
+  runOutputSafetyFixtures,
+  runFieldAllowlistFixtures,
+  runSizeLimitFixtures,
+  type SafetyFixtureResult,
+} from './harness/safety-fixture';

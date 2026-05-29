@@ -1,5 +1,5 @@
 datasource db {
-  provider = postgresql
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -21,7 +21,7 @@ model GameSession {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user            User?
+  user            User?       @relation(fields: [userId], references: [id])
   worldBlueprint  WorldBlueprint?
   gameStates      GameState[]
   dialogueMessages DialogueMessage[]
@@ -30,8 +30,7 @@ model GameSession {
   agentMemories   AgentMemory[]
   llmCalls        LlmCall[]
   safetyEvents    SafetyEvent[]
-
-  @@relation(fields: [userId], references: [id])
+  gameTraces     GameTrace[]
 }
 
 model WorldBlueprint {
@@ -57,19 +56,25 @@ model GameState {
   createdAt DateTime @default(now())
 
   session GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, turn])
 }
 
 model DialogueMessage {
-  id        String   @id @default(uuid())
-  sessionId String
-  npcId     String
-  role      String
-  content   String
-  metadata  Json?
-  turn      Int      @default(0)
-  createdAt DateTime @default(now())
+  id            String   @id @default(uuid())
+  sessionId     String
+  npcId         String
+  role          String
+  content       String
+  metadata      Json?
+  turn          Int      @default(0)
+  trustBefore   Float?
+  trustAfter    Float?
+  createdAt     DateTime @default(now())
 
   session GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, npcId, turn])
 }
 
 model WorldEvent {
@@ -81,6 +86,8 @@ model WorldEvent {
   createdAt DateTime @default(now())
 
   session GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, turn])
 }
 
 model JournalEntry {
@@ -95,6 +102,8 @@ model JournalEntry {
   createdAt   DateTime  @default(now())
 
   session GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, turn])
 }
 
 model AgentMemory {
@@ -105,10 +114,11 @@ model AgentMemory {
   content     String
   importance  Float    @default(0.5)
   source      String
-  embedding   Bytes?
   createdAt   DateTime @default(now())
 
   session GameSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, npcId])
 }
 
 model LlmCall {
@@ -130,6 +140,8 @@ model LlmCall {
   createdAt            DateTime @default(now())
 
   session GameSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
 }
 
 model SafetyEvent {
@@ -141,6 +153,23 @@ model SafetyEvent {
   createdAt DateTime @default(now())
 
   session GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+}
+
+model GameTrace {
+  id             String   @id @default(uuid())
+  sessionId      String
+  turn           Int
+  actionType     String
+  payload        Json
+  stateSnapshot  Json
+  events         Json
+  createdAt      DateTime @default(now())
+
+  session GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, turn])
 }
 
 model PromptVersion {

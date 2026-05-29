@@ -7,11 +7,25 @@ export type Realm = (typeof REALMS)[number]
 export const RISK_LEVELS = ['low','medium','high','extreme'] as const
 export type RiskLevel = (typeof RISK_LEVELS)[number]
 
-export const EVENT_TYPES = ['annual','event','discovery','relationship_change','ending_candidate','realm_breakthrough','death'] as const
+export const EVENT_TYPES = ['annual','event','discovery','relationship_change','ending_candidate','realm_breakthrough','breakthrough_failure','death'] as const
 export type EventType = (typeof EVENT_TYPES)[number]
 
 export const JOURNAL_CATEGORIES = ['event','discovery','relationship','realm','ending'] as const
 export type JournalCategory = (typeof JOURNAL_CATEGORIES)[number]
+
+export const ATTRIBUTE_KEYS = ['calculation','geometry','abstraction','proof','intuition','focus','physique','family'] as const
+export type AttributeKey = (typeof ATTRIBUTE_KEYS)[number]
+
+export const ATTRIBUTE_LABELS: Record<AttributeKey, string> = {
+  calculation: '演算',
+  geometry: '几何',
+  abstraction: '抽象',
+  proof: '证明',
+  intuition: '直觉',
+  focus: '专注',
+  physique: '体魄',
+  family: '家世',
+}
 
 export interface WorldPreference {
   direction: string
@@ -35,7 +49,8 @@ export interface PowerSystem {
     id: string
     name: string
     realm: string
-    backstory: string
+    legend: string
+    mathematicalContribution?: string
   }>
 }
 
@@ -81,6 +96,16 @@ export interface NpcSeed {
   trustLevel: number
 }
 
+export interface Clue {
+  id: string
+  name: string
+  description: string
+  locationId?: string
+  npcId?: string
+  category: 'evidence' | 'rumor_clue' | 'investigation' | 'dialogue_hint' | 'breakthrough_insight'
+  relatedEndingIds?: string[]
+}
+
 export interface Rumor {
   id: string
   content: string
@@ -89,18 +114,26 @@ export interface Rumor {
   relatedNpc?: string
 }
 
+export interface TriggerCondition {
+  minRealm?: string
+  minAge?: number
+  locationId?: string
+  discoveredNpcId?: string
+  discoveredClueId?: string
+}
+
 export interface EventOption {
   label: string
   description: string
   riskLevel?: RiskLevel
   consequenceHint: string
-  attributeEffects?: Record<string, number>
+  attributeEffects?: Partial<Record<AttributeKey, number>>
   requiresRealm?: string
 }
 
 export interface EventSeed {
   id: string
-  triggerCondition: string
+  triggerCondition: TriggerCondition
   locationId: string
   description: string
   options: EventOption[]
@@ -122,6 +155,7 @@ export interface WorldBlueprint {
   factions: Faction[]
   locations: Location[]
   npcs: NpcSeed[]
+  clues: Clue[]
   rumors: Rumor[]
   events: EventSeed[]
   endingCandidates: EndingCandidate[]
@@ -135,19 +169,8 @@ export interface Attribute {
   proof: number
   intuition: number
   focus: number
-  body: number
+  physique: number
   family: number
-}
-
-export const ATTRIBUTE_LABELS: Record<keyof Attribute, string> = {
-  calculation: '演算',
-  geometry: '几何',
-  abstraction: '抽象',
-  proof: '证明',
-  intuition: '直觉',
-  focus: '专注',
-  body: '体魄',
-  family: '家世',
 }
 
 export type FriendshipLevel = 'stranger' | 'acquaintance' | 'friend' | 'confidant' | 'rival' | 'enemy'
@@ -209,6 +232,7 @@ export interface ApiResponse<T> {
   data?: T
   error?: string
   traceId?: string
+  warnings?: string[]
 }
 
 export interface StateUpdate {
@@ -221,6 +245,7 @@ export interface StateUpdate {
     turn: number
   }>
   relationships: Record<string, RelationshipState>
+  hints?: string[]
 }
 
 export const GenerationScaleEnum = ['small', 'medium', 'large'] as const

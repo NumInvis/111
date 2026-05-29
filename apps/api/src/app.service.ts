@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { ApiResponse } from '@vi/shared';
+import type { ApiResponse } from '@variational-infinity/shared';
 
 @Injectable()
 export class AppService {

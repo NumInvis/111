@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 
 from app.agents.ending_director import generate_ending_candidate
 from app.dependencies import get_settings
-from app.safety.pipeline import check_input_safety, check_output_safety
+from app.safety.pipeline import check_input_safety, full_output_check
 from app.schemas.models import EndingCandidate, EndingGenerationRequest
 
 router = APIRouter()
@@ -20,7 +20,12 @@ async def generate_ending(request: EndingGenerationRequest):
     except ValueError as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-    output_safety = check_output_safety(ending.model_dump())
+    ENDING_CANDIDATE_ALLOWED_FIELDS = {
+        "id", "title", "description", "requiredEvidence",
+        "requiredRealm", "tone",
+    }
+
+    output_safety = full_output_check(ending.model_dump(by_alias=True), ENDING_CANDIDATE_ALLOWED_FIELDS)
     if not output_safety.safe:
         raise HTTPException(status_code=422, detail=output_safety.errors)
 

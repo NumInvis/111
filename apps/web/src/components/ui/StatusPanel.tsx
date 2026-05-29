@@ -1,4 +1,5 @@
 import { forwardRef } from 'react'
+import { useGameStore } from '@/stores/gameStore'
 import type { PlayerState, Attribute } from '@/types'
 import { ATTRIBUTE_LABELS } from '@/types'
 
@@ -9,6 +10,10 @@ interface StatusPanelProps {
 
 const StatusPanel = forwardRef<HTMLDivElement, StatusPanelProps>(
   ({ player, currentYear }, ref) => {
+    const worldBlueprint = useGameStore((s) => s.worldBlueprint)
+    const locationName = worldBlueprint?.locations.find(
+      (l) => l.id === player.currentLocationId,
+    )?.name ?? player.currentLocationId
     const attrEntries = (Object.entries(ATTRIBUTE_LABELS) as [keyof Attribute, string][]).map(
       ([key, label]) => ({ key, label, value: player.attributes[key] })
     )
@@ -45,7 +50,7 @@ const StatusPanel = forwardRef<HTMLDivElement, StatusPanelProps>(
           )}
           <div>
             <div className="font-mono text-xs font-bold text-text-secondary mb-1">当前地点</div>
-            <div className="font-mono font-bold text-sm">{player.currentLocationId}</div>
+            <div className="font-mono font-bold text-sm">{locationName}</div>
           </div>
         </div>
       </div>

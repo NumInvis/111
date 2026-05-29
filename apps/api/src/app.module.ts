@@ -8,6 +8,7 @@ import { SafetyModule } from './safety/safety.module';
 import { AuditModule } from './audit/audit.module';
 import { GenerationModule } from './generation/generation.module';
 import { GameModule } from './game/game.module';
+import { AgentBridgeModule } from './agent-bridge/agent-bridge.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { GameModule } from './game/game.module';
     AuditModule,
     GenerationModule,
     GameModule,
+    AgentBridgeModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -4,7 +4,10 @@ import type {
   ActionType,
   EndingCandidate,
   RealmName,
+  TriggerCondition,
 } from '@variational-infinity/shared';
+import { evaluateTriggerCondition } from '../rules/rules';
+import { REALM_ORDER, realmOrder } from '../constants/realm-constants';
 
 export type GamePhase =
   | 'initializing'
@@ -59,6 +62,16 @@ const TRANSITIONS: StateTransition[] = [
   },
   {
     from: 'exploring',
+    to: 'event',
+    action: 'event_choice',
+  },
+  {
+    from: 'exploring',
+    to: 'ending_check',
+    action: 'attempt_breakthrough',
+  },
+  {
+    from: 'exploring',
     to: 'ending_check',
     action: 'ending_candidate',
     condition: (snap) => hasSufficientEvidence(snap),
@@ -106,55 +119,7 @@ function hasSufficientEvidence(snapshot: GameStateSnapshot): boolean {
   );
 }
 
-const REALM_ORDER: Record<RealmName, number> = {
-  '炼体': 0,
-  '练气': 1,
-  '筑基': 2,
-  '本元': 3,
-  '通明': 4,
-  '化神': 5,
-  '归一': 6,
-  '渡劫': 7,
-  '天门': 8,
-  '仙境': 9,
-  '圣境': 10,
-  '变分境': 11,
-  '天道境': 12,
-  '无限': 13,
-};
 
-function realmOrder(realm: RealmName): number {
-  return REALM_ORDER[realm] ?? -1;
-}
-
-interface EndingArbitrator {
-  checkEndingCandidate(
-    candidate: EndingCandidate,
-    playerState: PlayerState,
-  ): boolean;
-  checkAllEndingCandidates(
-    candidates: EndingCandidate[],
-    playerState: PlayerState,
-  ): EndingCandidate[];
-}
-
-const endingArbitrator: EndingArbitrator = {
-  checkEndingCandidate(candidate, playerState) {
-    const evidenceMet = candidate.requiredEvidence.every((id) =>
-      playerState.discoveredClues.includes(id),
-    );
-    const realmMet =
-      !candidate.requiredRealm ||
-      realmOrder(playerState.realm) >=
-        realmOrder(candidate.requiredRealm as RealmName);
-    return evidenceMet && realmMet;
-  },
-  checkAllEndingCandidates(candidates, playerState) {
-    return candidates.filter((c) =>
-      endingArbitrator.checkEndingCandidate(c, playerState),
-    );
-  },
-};
 
 export class GameStateMachine {
   private snapshot: GameStateSnapshot;
@@ -242,11 +207,23 @@ export class GameStateMachine {
   }
 
   checkEndingCandidates(): EndingCandidate[] {
-    return endingArbitrator.checkAllEndingCandidates(
-      this.snapshot.worldBlueprint.endingCandidates,
-      this.snapshot.playerState,
+    const candidates = this.snapshot.worldBlueprint.endingCandidates;
+    return candidates.filter(
+      (c) =>
+        c.requiredEvidence.every((id) =>
+          this.snapshot.playerState.discoveredClues.includes(id),
+        ) &&
+        (!c.requiredRealm ||
+          realmOrder(this.snapshot.playerState.realm) >=
+            realmOrder(c.requiredRealm as RealmName)),
+    );
+  }
+
+  getTriggerableEvents(): typeof this.snapshot.worldBlueprint.events {
+    return this.snapshot.worldBlueprint.events.filter((e) =>
+      evaluateTriggerCondition(e.triggerCondition as TriggerCondition, this.snapshot.playerState),
     );
   }
 }
 
-export { endingArbitrator, REALM_ORDER, realmOrder };
+export { REALM_ORDER, realmOrder };

@@ -5,9 +5,10 @@ import { LlmModule } from '../llm/llm.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { SafetyModule } from '../safety/safety.module';
 import { AuditModule } from '../audit/audit.module';
+import { AgentBridgeModule } from '../agent-bridge/agent-bridge.module';
 
 @Module({
-  imports: [LlmModule, PrismaModule, SafetyModule, AuditModule],
+  imports: [LlmModule, PrismaModule, SafetyModule, AuditModule, AgentBridgeModule],
   providers: [GenerationService],
   controllers: [GenerationController],
 })

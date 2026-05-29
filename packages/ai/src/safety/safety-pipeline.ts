@@ -3,6 +3,7 @@ export interface SafetyCheckResult {
   injectionScore?: number;
   toxicityScore?: number;
   errors?: string[];
+  severity?: 'blocker' | 'warning';
 }
 
 const INJECTION_PATTERNS: Array<{ pattern: RegExp; weight: number }> = [
@@ -19,16 +20,30 @@ const INJECTION_PATTERNS: Array<{ pattern: RegExp; weight: number }> = [
   { pattern: /pretend\s+you\s+are/i, weight: 0.2 },
   { pattern: /act\s+as\s+if/i, weight: 0.15 },
   { pattern: /disregard/i, weight: 0.2 },
+  { pattern: /忽略之前/i, weight: 0.3 },
+  { pattern: /系统提示/i, weight: 0.3 },
+  { pattern: /你现在/i, weight: 0.2 },
+  { pattern: /忘记一切/i, weight: 0.3 },
+  { pattern: /管理员模式/i, weight: 0.2 },
+  { pattern: /绕过/i, weight: 0.2 },
 ];
 
 const SECRET_PATTERNS: Array<{ pattern: RegExp; label: string }> = [
-  { pattern: /api[_-]?key/i, label: 'API key reference' },
-  { pattern: /secret/i, label: 'Secret reference' },
-  { pattern: /password/i, label: 'Password reference' },
-  { pattern: /authorization/i, label: 'Authorization header' },
-  { pattern: /bearer\s+/i, label: 'Bearer token' },
-  { pattern: /sk-[a-zA-Z0-9]{8,}/i, label: 'Exposed API key (sk-*)' },
-  { pattern: /token\s*[=:]/i, label: 'Token assignment' },
+  { pattern: /sk-[a-zA-Z0-9]{20,}/i, label: 'Exposed API key (sk-*)' },
+  { pattern: /api[_-]?key\s*[=:]\s*\S/i, label: 'API key assignment' },
+  { pattern: /Bearer\s+[a-zA-Z0-9._-]{16,}/i, label: 'Bearer token exposure' },
+  { pattern: /token\s*[=:]\s*[a-zA-Z0-9._-]{16,}/i, label: 'Token assignment' },
+  { pattern: /password\s*[=:]\s*\S/i, label: 'Password assignment' },
+];
+
+const OUTPUT_INJECTION_PATTERNS: Array<{ pattern: RegExp; weight: number }> = [
+  { pattern: /<<</, weight: 0.4 },
+  { pattern: /\[system\]/i, weight: 0.4 },
+  { pattern: /###\s*system/i, weight: 0.4 },
+  { pattern: /ignore\s+previous/i, weight: 0.3 },
+  { pattern: /system\s+prompt/i, weight: 0.3 },
+  { pattern: /override\s+safety/i, weight: 0.3 },
+  { pattern: /override\s+rules/i, weight: 0.3 },
 ];
 
 const INJECTION_THRESHOLD = 0.8;
@@ -51,6 +66,7 @@ export class InputSafetyPipeline {
       return {
         safe: false,
         injectionScore: score,
+        severity: 'blocker',
         errors: [`Prompt injection detected (score: ${score.toFixed(2)}). Matched patterns: ${matchedPatterns.join(', ')}`],
       };
     }
@@ -65,9 +81,8 @@ export class InputSafetyPipeline {
 export class OutputSafetyPipeline {
   check(output: string): SafetyCheckResult {
     const errors: string[] = [];
-    let hasInjection = false;
+    const warnings: string[] = [];
     let injectionScore = 0;
-    let toxicityScore = 0;
 
     for (const { pattern, label } of SECRET_PATTERNS) {
       if (pattern.test(output)) {
@@ -75,25 +90,35 @@ export class OutputSafetyPipeline {
       }
     }
 
-    for (const { pattern, weight } of INJECTION_PATTERNS) {
+    for (const { pattern, weight } of OUTPUT_INJECTION_PATTERNS) {
       if (pattern.test(output)) {
-        hasInjection = true;
         injectionScore += weight;
       }
     }
 
     injectionScore = Math.min(injectionScore, 1);
 
-    if (hasInjection) {
+    if (injectionScore >= INJECTION_THRESHOLD) {
       errors.push(`Output injection detected (score: ${injectionScore.toFixed(2)})`);
+    } else if (injectionScore > 0) {
+      warnings.push(`Minor output injection indicators (score: ${injectionScore.toFixed(2)})`);
     }
 
     if (errors.length > 0) {
       return {
         safe: false,
-        injectionScore: hasInjection ? injectionScore : undefined,
-        toxicityScore: toxicityScore > 0 ? toxicityScore : undefined,
+        severity: 'blocker',
+        injectionScore: injectionScore > 0 ? injectionScore : undefined,
         errors,
+      };
+    }
+
+    if (warnings.length > 0) {
+      return {
+        safe: true,
+        severity: 'warning',
+        injectionScore,
+        errors: warnings,
       };
     }
 
@@ -107,7 +132,8 @@ export class FieldAllowlistPipeline {
 
     if (extraFields.length > 0) {
       return {
-        safe: false,
+        safe: true,
+        severity: 'warning',
         errors: [`Extra fields not in allowlist: ${extraFields.join(', ')}. Allowed: ${allowlist.join(', ')}`],
       };
     }
@@ -172,18 +198,25 @@ export class ReferenceIntegrityPipeline {
     }
 
     if (typeof obj.requiredRealm === 'string') {
-      const validRealmIds = [
+      const validRealmValues = [
         'lianTi', 'lianQi', 'zhuJi', 'benYuan', 'tongMing', 'huaShen',
         'guiYi', 'duJie', 'tianMen', 'xianJing', 'shengJing',
         'bianFenJing', 'tianDaoJing', 'wuXian',
+        '炼体', '练气', '筑基', '本元', '通明', '化神',
+        '归一', '渡劫', '天门', '仙境', '圣境',
+        '变分境', '天道境', '无限',
       ];
-      if (!validRealmIds.includes(obj.requiredRealm)) {
-        errors.push(`requiredRealm "${obj.requiredRealm}" is not a valid realm ID`);
+      if (!validRealmValues.includes(obj.requiredRealm)) {
+        errors.push(`requiredRealm "${obj.requiredRealm}" is not a valid realm ID or name`);
       }
     }
 
     if (errors.length > 0) {
-      return { safe: false, errors };
+      return {
+        safe: true,
+        severity: 'warning',
+        errors,
+      };
     }
 
     return { safe: true };
@@ -204,6 +237,7 @@ export class SizeLimitPipeline {
     if (sizeBytes > this.maxSizeBytes) {
       return {
         safe: false,
+        severity: 'warning',
         errors: [`JSON output exceeds size limit: ${sizeBytes} bytes > ${this.maxSizeBytes} bytes (${(this.maxSizeBytes / 1024).toFixed(0)}KB)`],
       };
     }

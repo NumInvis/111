@@ -117,16 +117,38 @@ class EventOption(BaseModel):
     requires_realm: Optional[str] = Field(alias="requiresRealm", default=None, description="Optional realm ID required to be eligible for this option")
 
 
+class TriggerCondition(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    min_realm: Optional[str] = Field(alias="minRealm", default=None, description="Optional minimum realm ID required for this trigger")
+    min_age: Optional[int] = Field(alias="minAge", default=None, description="Optional minimum player age required for this trigger")
+    location_id: Optional[str] = Field(alias="locationId", default=None, description="Optional location ID where this trigger activates")
+    discovered_npc_id: Optional[str] = Field(alias="discoveredNpcId", default=None, description="Optional NPC ID that must be discovered for this trigger")
+    discovered_clue_id: Optional[str] = Field(alias="discoveredClueId", default=None, description="Optional clue ID that must be discovered for this trigger")
+
+
 class EventSeed(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
     id: str = Field(description="Unique identifier for the event seed")
-    trigger_condition: str = Field(alias="triggerCondition", description="Condition description for when this event triggers")
+    trigger_condition: TriggerCondition = Field(alias="triggerCondition", description="Structured condition for when this event triggers")
     location_id: str = Field(alias="locationId", description="Location ID where this event takes place")
     description: str = Field(description="Narrative description of the event scenario")
     one_time: bool = Field(alias="oneTime", default=True, description="Whether this event can only trigger once per game session")
     options: list[EventOption] = Field(min_length=2, max_length=4, description="Available choices for the player (2-4 options)")
     related_npc_ids: Optional[list[str]] = Field(alias="relatedNpcIds", default=None, description="Optional NPC IDs involved in this event")
+
+
+class Clue(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    id: str = Field(description="Unique identifier for the clue")
+    name: str = Field(description="Display name of the clue")
+    description: str = Field(description="Description of what this clue reveals or hints at")
+    location_id: Optional[str] = Field(alias="locationId", default=None, description="Optional location ID where this clue can be found")
+    npc_id: Optional[str] = Field(alias="npcId", default=None, description="Optional NPC ID whose secret relates to this clue")
+    category: str = Field(description="Category of the clue: evidence, rumor_clue, investigation, dialogue_hint, or breakthrough_insight")
+    related_ending_ids: Optional[list[str]] = Field(alias="relatedEndingIds", default=None, description="Optional ending candidate IDs this clue serves as evidence for")
 
 
 class EndingCandidate(BaseModel):
@@ -148,6 +170,7 @@ class WorldBlueprint(BaseModel):
     locations: list[Location] = Field(min_length=3, max_length=7, description="Explorable locations in this world (3-7)")
     npcs: list[NpcSeed] = Field(min_length=3, max_length=7, description="NPCs populating this world (3-7)")
     rumors: list[Rumor] = Field(min_length=2, max_length=10, description="Rumors circulating in this world (2-10)")
+    clues: list[Clue] = Field(default_factory=list, description="Clues/evidence discoverable in this world")
     events: list[EventSeed] = Field(min_length=3, max_length=8, description="Event seeds that may trigger during play (3-8)")
     ending_candidates: list[EndingCandidate] = Field(alias="endingCandidates", min_length=2, max_length=5, description="Possible endings the player may reach (2-5)")
     state_model: Optional[dict[str, list[int]]] = Field(alias="stateModel", default=None, description="Optional model of state field names to allowed value ranges [min, max]")
@@ -173,14 +196,21 @@ class NpcDialogueRequest(BaseModel):
     npc_context: Optional[dict] = Field(alias="npcContext", default=None, description="Optional NPC context data (personality, realm, trust, etc.)")
 
 
+class NpcDialogueMetadata(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    emotion: str = Field(description="The NPC's emotional state in this response")
+    trust_change: float = Field(alias="trustChange", ge=-0.1, le=0.1, description="Change in trust level toward the player (-0.1 to 0.1)")
+    hint_at_secret: Optional[bool] = Field(alias="hintAtSecret", default=None, description="Whether the NPC hints at their secret in this response")
+    suggested_actions: Optional[list[str]] = Field(alias="suggestedActions", default=None, description="Optional suggested next actions for the player")
+
+
 class NpcDialogueOutput(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
+    role: str = Field(default="npc", description="The role of the speaker (always 'npc' for NPC dialogue)")
     content: str = Field(description="The NPC's dialogue response text")
-    emotion: str = Field(description="The NPC's emotional state in this response")
-    trust_change: float = Field(alias="trustChange", ge=-0.1, le=0.1, description="Change in trust level toward the player (-0.1 to 0.1)")
-    suggested_follow_up: Optional[str] = Field(alias="suggestedFollowUp", default=None, description="Optional suggested follow-up topic or action")
-    memory_reference: Optional[str] = Field(alias="memoryReference", default=None, description="Optional reference to a past memory entry that informed this response")
+    metadata: Optional[NpcDialogueMetadata] = Field(default=None, description="Metadata about the NPC's emotional state and trust change")
 
 
 class EventGenerationRequest(BaseModel):
