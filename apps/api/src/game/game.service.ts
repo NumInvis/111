@@ -42,7 +42,7 @@ import type {
 import { PromptRegistryService } from '../llm/prompt-registry.service';
 
 const NpcDialogueOutputSchema = z.object({
-  role: z.string(),
+  role: z.enum(['npc']),
   content: z.string(),
   metadata: z.object({
     emotion: z.string(),
@@ -118,8 +118,16 @@ export class GameService {
     if (stateUpdate.newState.attributes) {
       mergedState.attributes = { ...playerState.attributes, ...stateUpdate.newState.attributes };
     }
-    if (stateUpdate.newState.discoveredClues) {
-      mergedState.discoveredClues = [...playerState.discoveredClues, ...stateUpdate.newState.discoveredClues.filter((id) => !playerState.discoveredClues.includes(id))];
+    const mergeArray = (existing: string[], incoming: string[] | undefined): string[] => {
+      if (!incoming) return existing;
+      return [...existing, ...incoming.filter((id) => !existing.includes(id))];
+    };
+    mergedState.discoveredLocations = mergeArray(playerState.discoveredLocations, stateUpdate.newState.discoveredLocations);
+    mergedState.discoveredNpcs = mergeArray(playerState.discoveredNpcs, stateUpdate.newState.discoveredNpcs);
+    mergedState.discoveredClues = mergeArray(playerState.discoveredClues, stateUpdate.newState.discoveredClues);
+    mergedState.discoveredRumors = mergeArray(playerState.discoveredRumors, stateUpdate.newState.discoveredRumors);
+    if (stateUpdate.newState.relationships) {
+      mergedState.relationships = { ...playerState.relationships, ...stateUpdate.newState.relationships };
     }
     PlayerStateSchema.parse(mergedState);
 
@@ -233,7 +241,7 @@ export class GameService {
       turn: stateUpdate.newState.age ?? playerState.age,
     });
 
-    await this.syncJournalToAgentMemory(sessionId, stateUpdate.journalEntries);
+    await this.syncJournalToAgentMemory(sessionId, stateUpdate.journalEntries, action.actionType, action.payload as Record<string, unknown>);
 
     await this.recordGameTrace(sessionId, action.actionType, action.payload as Record<string, unknown>, mergedState, stateUpdate.events);
 
@@ -545,6 +553,11 @@ export class GameService {
 
     PlayerStateSchema.parse(updatedPlayerState);
 
+    const existingState = await this.prisma.gameState.findFirst({
+      where: { sessionId, turn: playerState.age },
+      orderBy: { createdAt: 'desc' },
+    });
+
     await this.prisma.$transaction([
       this.prisma.dialogueMessage.create({
         data: {
@@ -558,13 +571,18 @@ export class GameService {
           trustAfter,
         },
       }),
-      this.prisma.gameState.create({
-        data: {
-          sessionId,
-          turn: playerState.age,
-          data: updatedPlayerState as object,
-        },
-      }),
+      existingState
+        ? this.prisma.gameState.update({
+            where: { id: existingState.id },
+            data: { data: updatedPlayerState as object },
+          })
+        : this.prisma.gameState.create({
+            data: {
+              sessionId,
+              turn: playerState.age,
+              data: updatedPlayerState as object,
+            },
+          }),
     ]);
 
     await this.auditService.logStateChange(sessionId, 'dialogue_message', {
@@ -598,7 +616,7 @@ export class GameService {
     return { canAttempt: false, nextRealm: null, reason: result.reason ?? '' };
   }
 
-  private async syncJournalToAgentMemory(sessionId: string, journalEntries: Array<{ turn: number; action: string; result: string; locationId?: string; category: string; evidenceTag?: boolean }>): Promise<void> {
+  private async syncJournalToAgentMemory(sessionId: string, journalEntries: Array<{ turn: number; action: string; result: string; locationId?: string; category: string; evidenceTag?: boolean }>, actionType?: string, payload?: Record<string, unknown>): Promise<void> {
     const useAgentBridge = this.configService.get<string>('USE_AGENT_BRIDGE', 'true') === 'true';
     if (!useAgentBridge || journalEntries.length === 0) return;
 
@@ -607,16 +625,13 @@ export class GameService {
       .join('\n');
 
     const npcIds = new Set<string>();
-    for (const entry of journalEntries) {
-      if (entry.action === 'talk' || entry.action === 'dialogue_message') {
-        const match = entry.result.match(/NPC[:\s]+([a-zA-Z0-9_-]+)/);
-        if (match) npcIds.add(match[1]);
-      }
+    if (actionType === 'talk' && payload?.npcId) {
+      npcIds.add(payload.npcId as string);
     }
 
     try {
       for (const npcId of npcIds) {
-        const summaries = await this.agentBridgeService.summarizeMemory(npcId, rawContent);
+        const summaries = await this.agentBridgeService.summarizeMemory(sessionId, npcId, rawContent);
         for (const summary of summaries) {
           await this.prisma.agentMemory.create({
             data: {
@@ -632,7 +647,7 @@ export class GameService {
       }
 
       if (npcIds.size === 0) {
-        const summaries = await this.agentBridgeService.summarizeMemory('world', rawContent);
+        const summaries = await this.agentBridgeService.summarizeMemory(sessionId, 'world', rawContent);
         for (const summary of summaries) {
           await this.prisma.agentMemory.create({
             data: {

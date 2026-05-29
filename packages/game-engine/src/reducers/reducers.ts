@@ -717,7 +717,19 @@ export function applyAttemptBreakthroughAction(
   if (result.allowed) {
     const thresholds = REALM_ADVANCEMENT_THRESHOLDS[nextRealm];
     const thresholdKeys = Object.keys(thresholds ?? {});
-    const primaryAttribute = (thresholdKeys.length > 0 ? thresholdKeys[0] : 'focus') as keyof Attribute;
+    let primaryAttribute: keyof Attribute = (thresholdKeys.length > 0 ? thresholdKeys[0] : 'focus') as keyof Attribute;
+    if (thresholdKeys.length > 1) {
+      let minGap = Infinity;
+      for (const key of thresholdKeys) {
+        const attrKey = key as keyof Attribute;
+        const threshold = (thresholds as Record<string, number>)[key] ?? 100;
+        const gap = threshold - (currentState.attributes[attrKey] ?? 0);
+        if (gap < minGap) {
+          minGap = gap;
+          primaryAttribute = attrKey;
+        }
+      }
+    }
     const consumptionAmount = BREAKTHROUGH_COST[nextRealm] ?? 5;
 
     const updatedAttributes: Attribute = { ...currentState.attributes };

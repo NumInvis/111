@@ -85,19 +85,19 @@ export class AgentBridgeService {
     return this.callAgent<Record<string, unknown>>('/ending/generate', request);
   }
 
-  async summarizeMemory(npcId: string, rawContent: string): Promise<Record<string, unknown>[]> {
+  async summarizeMemory(sessionId: string, npcId: string, rawContent: string): Promise<Record<string, unknown>[]> {
     this.logger.log(`Requesting memory summarization for NPC ${npcId} from Agent Service`);
     return this.callAgent<Record<string, unknown>[]>(
-      `/memory/summarize?npc_id=${encodeURIComponent(npcId)}&raw_content=${encodeURIComponent(rawContent)}`,
-      {},
+      `/memory/${sessionId}/summarize`,
+      { npcId, rawContent },
     );
   }
 
-  async retrieveMemories(npcId: string, limit?: number): Promise<Record<string, unknown>[]> {
+  async retrieveMemories(sessionId: string, npcId: string, limit?: number): Promise<Record<string, unknown>[]> {
     const limitParam = limit ?? 20;
     this.logger.log(`Requesting memory retrieval for NPC ${npcId} from Agent Service`);
     return this.callAgent<Record<string, unknown>[]>(
-      `/memory/retrieve?npc_id=${encodeURIComponent(npcId)}&limit=${limitParam}`,
+      `/memory/${sessionId}/retrieve?npc_id=${encodeURIComponent(npcId)}&limit=${limitParam}`,
       {},
     );
   }
