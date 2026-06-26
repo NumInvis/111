@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Loader2, ArrowLeft, Skull, Trophy, Scroll, Sparkles } from 'lucide-react'
+import { Loader2, ArrowLeft, Skull, Trophy, Scroll, Sparkles, Settings2, X } from 'lucide-react'
 import { logger, fetchApi } from './lib/logger'
 
 interface GameState {
@@ -24,6 +24,10 @@ interface TurnResp {
   state: GameState; status: 'playing' | 'died' | 'ended'
 }
 
+interface WorldPreference {
+  theme?: string; tone?: string; scale?: 'small' | 'medium' | 'large'; seed?: string
+}
+
 const LORE_FRAGMENTS = [
   '天地初开，混沌未分...',
   '大道无形，生育天地...',
@@ -43,6 +47,13 @@ const WISDOM = [
   '极值处见真章',
 ]
 
+const TONES = ['轻松', '严肃', '黑暗', '浪漫', '荒诞']
+const SCALES: Array<{ value: WorldPreference['scale']; label: string }> = [
+  { value: 'small', label: '小型' },
+  { value: 'medium', label: '中型' },
+  { value: 'large', label: '大型' },
+]
+
 type Phase = 'home' | 'creating' | 'playing' | 'loading' | 'died' | 'ended'
 
 export default function App() {
@@ -56,6 +67,8 @@ export default function App() {
   const [log, setLog] = useState<Array<{ r: string; c: string }>>([])
   const [loreIdx, setLoreIdx] = useState(0)
   const [wisdomIdx] = useState(() => Math.floor(Math.random() * WISDOM.length))
+  const [showPref, setShowPref] = useState(false)
+  const [preference, setPreference] = useState<WorldPreference>({ theme: '', tone: '', scale: 'medium', seed: '' })
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -68,11 +81,24 @@ export default function App() {
     return () => clearInterval(interval)
   }, [phase])
 
+  function buildPreference(): WorldPreference | undefined {
+    const p: WorldPreference = {}
+    if (preference.theme?.trim()) p.theme = preference.theme.trim()
+    if (preference.tone?.trim()) p.tone = preference.tone.trim()
+    if (preference.scale) p.scale = preference.scale
+    if (preference.seed?.trim()) p.seed = preference.seed.trim()
+    return Object.keys(p).length > 0 ? p : undefined
+  }
+
   async function startGame() {
     setPhase('creating'); setErr(null); setLog([])
-    logger.logUserAction('开天辟地')
+    const pref = buildPreference()
+    logger.logUserAction('开天辟地', pref as Record<string, unknown> | undefined)
     try {
-      const s = await fetchApi<{ id: string; state: GameState }>('/game/sessions', { method: 'POST' })
+      const s = await fetchApi<{ id: string; state: GameState }>('/game/sessions', {
+        method: 'POST',
+        body: JSON.stringify({ preference: pref }),
+      })
       if (!s.data) throw new Error('No data')
       setSid(s.data.id); setState(s.data.state)
       setLog([{ r: 'sys', c: `世界「${s.data.state.world.name}」已生成` }])
@@ -134,10 +160,65 @@ export default function App() {
           <div className="bg-bg-card border-3 border-border-primary shadow-nb p-4">
             <p className="font-mono text-xs text-accent-cyan italic">{WISDOM[wisdomIdx]}</p>
           </div>
+
+          <AnimatePresence>
+            {showPref && (
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                className="bg-bg-card border-3 border-border-primary shadow-nb p-4 text-left space-y-3 overflow-hidden">
+                <div className="flex items-center justify-between">
+                  <h2 className="font-mono font-bold text-sm">世界偏好</h2>
+                  <button onClick={() => setShowPref(false)} className="p-1 nb-hover"><X className="w-4 h-4" /></button>
+                </div>
+                <div>
+                  <label className="font-mono text-xs text-text-secondary block mb-1">主题</label>
+                  <input value={preference.theme} onChange={(e) => setPreference((p) => ({ ...p, theme: e.target.value }))}
+                    placeholder="如：古典修仙、赛博数学、克苏鲁几何"
+                    className="w-full bg-bg-paper border-2 border-border-primary px-3 py-2 font-mono text-sm focus:outline-none focus:border-accent-cyan" />
+                </div>
+                <div>
+                  <label className="font-mono text-xs text-text-secondary block mb-1">基调</label>
+                  <div className="flex flex-wrap gap-2">
+                    {TONES.map((t) => (
+                      <button key={t} onClick={() => setPreference((p) => ({ ...p, tone: t }))}
+                        className={`px-3 py-1 border-2 border-border-primary font-mono text-xs transition-all ${preference.tone === t ? 'bg-primary text-text-inverse' : 'bg-bg-paper nb-hover'}`}>
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="font-mono text-xs text-text-secondary block mb-1">规模</label>
+                  <div className="flex gap-2">
+                    {SCALES.map((s) => (
+                      <button key={s.value} onClick={() => setPreference((p) => ({ ...p, scale: s.value }))}
+                        className={`flex-1 px-3 py-1 border-2 border-border-primary font-mono text-xs transition-all ${preference.scale === s.value ? 'bg-primary text-text-inverse' : 'bg-bg-paper nb-hover'}`}>
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="font-mono text-xs text-text-secondary block mb-1">种子 / 关键词</label>
+                  <input value={preference.seed} onChange={(e) => setPreference((p) => ({ ...p, seed: e.target.value }))}
+                    placeholder="让 LLM 围绕某个关键词展开"
+                    className="w-full bg-bg-paper border-2 border-border-primary px-3 py-2 font-mono text-sm focus:outline-none focus:border-accent-cyan" />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {err && <p className="font-mono text-sm text-accent-red bg-accent-red/10 border-3 border-accent-red p-3">{err}</p>}
-          <button onClick={startGame} className="font-mono font-bold uppercase tracking-wide bg-primary text-text-inverse border-3 border-border-primary shadow-nb px-8 py-4 text-lg nb-hover nb-active transition-all">
-            <Sparkles className="w-5 h-5 inline mr-2" />开天辟地
-          </button>
+
+          <div className="flex gap-3 justify-center">
+            {!showPref && (
+              <button onClick={() => setShowPref(true)} className="font-mono font-bold uppercase tracking-wide bg-bg-card text-text-primary border-3 border-border-primary shadow-nb px-4 py-4 text-lg nb-hover nb-active transition-all">
+                <Settings2 className="w-5 h-5 inline mr-2" />配置
+              </button>
+            )}
+            <button onClick={startGame} className="font-mono font-bold uppercase tracking-wide bg-primary text-text-inverse border-3 border-border-primary shadow-nb px-8 py-4 text-lg nb-hover nb-active transition-all">
+              <Sparkles className="w-5 h-5 inline mr-2" />开天辟地
+            </button>
+          </div>
         </motion.div>
       </div>
     )

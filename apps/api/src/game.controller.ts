@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Param, Body, NotFoundException, BadRequestException } from '@nestjs/common';
 import { GameService } from './game.service';
+import { WorldPreference } from '@variational-infinity/shared';
 
 @Controller()
 export class GameController {
@@ -11,9 +12,9 @@ export class GameController {
   }
 
   @Post('game/sessions')
-  async createSession() {
+  async createSession(@Body() body?: { preference?: WorldPreference }) {
     try {
-      const result = await this.game.createSession();
+      const result = await this.game.createSession(body?.preference);
       return { success: true, data: result };
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed';

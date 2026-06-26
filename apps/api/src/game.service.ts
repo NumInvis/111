@@ -4,59 +4,15 @@ import { PrismaService } from './prisma.service';
 import { AppLogger } from './logger.module';
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
-
-const GameStateSchema = z.object({
-  player: z.object({
-    name: z.string(),
-    age: z.number(),
-    lifespan: z.number(),
-    realm: z.string(),
-    location: z.string(),
-    attributes: z.record(z.string(), z.number()),
-    discovered: z.array(z.string()),
-    relationships: z.record(z.string(), z.object({
-      trust: z.number(),
-      level: z.string(),
-    })),
-    history: z.string(),
-  }),
-  world: z.object({
-    name: z.string(),
-    conflict: z.string(),
-    rules: z.array(z.string()),
-    attributes: z.array(z.object({
-      name: z.string(),
-      desc: z.string(),
-      growth: z.number(),
-    })),
-    locations: z.array(z.object({
-      id: z.string(),
-      name: z.string(),
-      desc: z.string(),
-    })),
-    npcs: z.array(z.object({
-      id: z.string(),
-      name: z.string(),
-      role: z.string(),
-      personality: z.array(z.string()),
-      goal: z.string(),
-      secret: z.string(),
-    })),
-    clues: z.array(z.object({
-      id: z.string(),
-      name: z.string(),
-      desc: z.string(),
-    })),
-    endings: z.array(z.object({
-      id: z.string(),
-      title: z.string(),
-      desc: z.string(),
-      evidence: z.array(z.string()),
-    })),
-  }),
-});
-
-type GameState = z.infer<typeof GameStateSchema>;
+import {
+  GameStateSchema,
+  GameState,
+  WORLD_BOOK,
+  WorldPreference,
+  WorldPreferenceSchema,
+  TurnResponse,
+} from '@variational-infinity/shared';
+import { applyHardRules } from './rules';
 
 const LLMResponseSchema = z.object({
   narrative: z.string(),
@@ -69,23 +25,6 @@ const LLMResponseSchema = z.object({
   status: z.enum(['playing', 'died', 'ended']),
 });
 
-const WORLD_BOOK = `| 境界 | 数学水平 | 叙事地位 |
-|------|---------|---------|
-| 炼体 | 幼儿园 | 凡人启蒙 |
-| 练气 | 小学1-2年级 | 初入修行 |
-| 筑基 | 小学3-4年级 | 筑基立本 |
-| 本元 | 小学5-6年级 | 探求本元 |
-| 通明 | 初一初二 | 渐悟通明 |
-| 化神 | 初三 | 中考分流 |
-| 归一 | 高一高二 | 融会归一 |
-| 渡劫 | 高三 | 高考渡劫 |
-| 天门 | 高考/大学入学 | 界壁 |
-| 仙境 | 大学低年级 | 初入仙境 |
-| 圣境 | 大学高年级 | 专业精进 |
-| 变分境 | 研究生 | 变分求极 |
-| 天道境 | 数学系博士 | 参悟天道 |
-| 无限 | 超越 | 不可触及 |`;
-
 const SYSTEM_PROMPT = `你是「变分无限」的游戏主持人——一个数学修仙人生模拟器。玩家逐年成长，在14个境界中修炼，每个境界对应一个数学水平。
 
 ## 世界观
@@ -94,14 +33,14 @@ ${WORLD_BOOK}
 ## 你的职责
 1. 每回合生成当年情境（narrative）——玩家遇到了什么人、事、抉择
 2. 提供2-4个选择（options）——每个有真实取舍，没有"显然最优"
-3. 返回更新后的完整状态（state）——你是唯一的状态管理者
+3. 返回更新后的完整状态（state）——你是主要的状态管理者
 4. 判断状态（status）——playing/died/ended
 
-## 规则（由你在叙事中执行）
+## 规则（由你在叙事中执行，代码会兜底）
 - 属性范围0-100，每年自然增长growth点
 - 年龄每年+1，年龄≥寿元则died
-- 境界突破：属性达标时可突破，消耗主属性，延长寿元
-- 结局：玩家积累足够证据时可触发结局
+- 境界突破：属性达标时可突破，消耗主属性，延长寿元；境界只能前进，不能倒退
+- 结局：不要预设触发条件，结局应在叙事自然发展到高潮时由你决定，status设为ended
 - 境界越高，情境涉及的数学概念越深奥
 - 选项可以是任何事：修炼、探索、社交、冒险、求学——不要局限于固定类型
 
@@ -113,7 +52,15 @@ ${WORLD_BOOK}
   "status": "playing"
 }`;
 
-const WORLD_GEN_PROMPT = `你是「变分无限」的世界生成器。生成一个数学修仙世界的初始状态。
+function worldGenPrompt(preference?: WorldPreference): string {
+  const parts: string[] = [];
+  if (preference?.theme) parts.push(`主题：${preference.theme}`);
+  if (preference?.tone) parts.push(`基调：${preference.tone}`);
+  if (preference?.scale) parts.push(`规模：${preference.scale}`);
+  if (preference?.seed) parts.push(`种子/关键词：${preference.seed}`);
+  const preferenceBlock = parts.length > 0 ? `\n\n## 世界偏好\n${parts.join('\n')}` : '';
+
+  return `你是「变分无限」的世界生成器。生成一个数学修仙世界的初始状态。${preferenceBlock}
 
 ## 世界观
 ${WORLD_BOOK}
@@ -145,9 +92,10 @@ ${WORLD_BOOK}
     "locations": [{"id":"loc1","name":"地名","desc":"描述"}],
     "npcs": [{"id":"npc1","name":"名","role":"身份","personality":["严厉"],"goal":"目标","secret":"秘密"}],
     "clues": [{"id":"clue1","name":"名","desc":"描述"}],
-    "endings": [{"id":"end1","title":"标题","desc":"描述","evidence":["clue1"]}]
+    "endings": [{"id":"end1","title":"标题","desc":"描述","evidence":[]}]
   }
 }`;
+}
 
 @Injectable()
 export class GameService {
@@ -324,39 +272,48 @@ export class GameService {
     return result.data;
   }
 
-  async createSession(): Promise<{ id: string; state: GameState }> {
-    this.logger.logGameEvent('new', '世界生成开始');
+  async createSession(preference?: WorldPreference): Promise<{ id: string; state: GameState }> {
+    if (preference) {
+      const prefResult = WorldPreferenceSchema.safeParse(preference);
+      if (!prefResult.success) {
+        throw new BadRequestException('Invalid world preference');
+      }
+      preference = prefResult.data;
+    }
 
-    const raw = await this.callLLM(SYSTEM_PROMPT, WORLD_GEN_PROMPT, 'new', '世界生成', 0.8);
+    this.logger.logGameEvent('new', '世界生成开始', { preference });
+
+    const raw = await this.callLLM(SYSTEM_PROMPT, worldGenPrompt(preference), 'new', '世界生成', 0.8);
     const state = this.parseJSON(raw, GameStateSchema, 'World generation', 'new');
+    const normalized = applyHardRules(state, state.player.realm);
 
     this.logger.logGameEvent('new', '世界生成完成', {
-      worldName: state.world.name,
-      playerRealm: state.player.realm,
-      attributeCount: Object.keys(state.player.attributes).length,
-      locationCount: state.world.locations.length,
-      npcCount: state.world.npcs.length,
+      worldName: normalized.world.name,
+      playerRealm: normalized.player.realm,
+      attributeCount: Object.keys(normalized.player.attributes).length,
+      locationCount: normalized.world.locations.length,
+      npcCount: normalized.world.npcs.length,
     });
 
     const session = await this.prisma.session.create({
-      data: { status: 'active', state: state as object },
+      data: { status: 'active', state: normalized as object },
     });
 
     await this.prisma.message.create({
       data: {
         sessionId: session.id,
         role: 'system',
-        content: '世界已生成。' + state.world.name,
-        state: state as object,
+        content: '世界已生成。' + normalized.world.name,
+        state: normalized as object,
       },
     });
 
     this.logger.logGameEvent(session.id, '会话已创建', {
-      worldName: state.world.name,
-      playerName: state.player.name,
+      worldName: normalized.world.name,
+      playerName: normalized.player.name,
     });
 
-    return { id: session.id, state };
+    return { id: session.id, state: normalized };
   }
 
   async getSession(id: string): Promise<{ id: string; status: string; state: GameState; messages: Array<{ role: string; content: string }> }> {
@@ -385,7 +342,7 @@ export class GameService {
     };
   }
 
-  async sendAction(id: string, action: string): Promise<{ narrative: string; options: Array<{ id: string; label: string; desc: string }>; state: GameState; status: string }> {
+  async sendAction(id: string, action: string): Promise<TurnResponse> {
     const session = await this.prisma.session.findUnique({
       where: { id },
       include: { messages: { orderBy: { createdAt: 'asc' }, take: 10 } },
@@ -399,26 +356,39 @@ export class GameService {
       throw new BadRequestException(`Session is ${session.status}`);
     }
 
-    const state = session.state as GameState;
+    const previousState = session.state as GameState;
+    const previousRealm = previousState.player.realm;
     const history = session.messages
       .map((m: { role: string; content: string }) => `${m.role}: ${m.content}`)
       .join('\n');
 
     this.logger.logGameEvent(id, '玩家行动', {
       action,
-      currentAge: state.player.age,
-      currentRealm: state.player.realm,
+      currentAge: previousState.player.age,
+      currentRealm: previousState.player.realm,
     });
 
-    const userPrompt = `当前状态：\n${JSON.stringify(state, null, 2)}\n\n近期历史：\n${history}\n\n玩家行动：${action}`;
+    const userPrompt = `当前状态：\n${JSON.stringify(previousState, null, 2)}\n\n近期历史：\n${history}\n\n玩家行动：${action}`;
 
     const raw = await this.callLLM(SYSTEM_PROMPT, userPrompt, id, '回合推进', 0.9);
     const response = this.parseJSON(raw, LLMResponseSchema, 'Turn response', id);
 
+    const normalizedState = applyHardRules(response.state, previousRealm);
+    let status = response.status;
+    if (normalizedState.player.age >= normalizedState.player.lifespan) {
+      status = 'died';
+    }
+
+    const normalizedResponse: TurnResponse = {
+      ...response,
+      state: normalizedState,
+      status,
+    };
+
     await this.prisma.$transaction([
       this.prisma.session.update({
         where: { id },
-        data: { state: response.state as object, status: response.status === 'playing' ? 'active' : response.status },
+        data: { state: normalizedResponse.state as object, status: normalizedResponse.status === 'playing' ? 'active' : normalizedResponse.status },
       }),
       this.prisma.message.create({
         data: {
@@ -431,33 +401,33 @@ export class GameService {
         data: {
           sessionId: id,
           role: 'assistant',
-          content: response.narrative,
-          state: response.state as object,
+          content: normalizedResponse.narrative,
+          state: normalizedResponse.state as object,
         },
       }),
     ]);
 
     this.logger.logGameEvent(id, '回合完成', {
       action,
-      newAge: response.state.player.age,
-      newRealm: response.state.player.realm,
-      status: response.status,
-      optionCount: response.options.length,
-      narrativeLen: response.narrative.length,
+      newAge: normalizedResponse.state.player.age,
+      newRealm: normalizedResponse.state.player.realm,
+      status: normalizedResponse.status,
+      optionCount: normalizedResponse.options.length,
+      narrativeLen: normalizedResponse.narrative.length,
     });
 
-    if (response.status === 'died') {
+    if (normalizedResponse.status === 'died') {
       this.logger.logGameEvent(id, '玩家死亡', {
-        age: response.state.player.age,
-        realm: response.state.player.realm,
+        age: normalizedResponse.state.player.age,
+        realm: normalizedResponse.state.player.realm,
       });
-    } else if (response.status === 'ended') {
+    } else if (normalizedResponse.status === 'ended') {
       this.logger.logGameEvent(id, '推演终结', {
-        age: response.state.player.age,
-        realm: response.state.player.realm,
+        age: normalizedResponse.state.player.age,
+        realm: normalizedResponse.state.player.realm,
       });
     }
 
-    return response;
+    return normalizedResponse;
   }
 }

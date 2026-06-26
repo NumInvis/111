@@ -19,6 +19,7 @@
     "@nestjs/core": "^11",
     "@nestjs/platform-express": "^11",
     "@prisma/client": "^6",
+    "@variational-infinity/shared": "workspace:*",
     "reflect-metadata": "^0.2",
     "rxjs": "^7",
     "zod": "^3"
@@ -29,6 +30,7 @@
     "@swc/cli": "^0.8.1",
     "@swc/core": "^1.15.40",
     "@types/express": "^5",
+    "@types/jest": "^29",
     "jest": "^30",
     "prisma": "^6",
     "ts-jest": "^29",

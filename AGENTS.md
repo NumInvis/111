@@ -10,6 +10,7 @@ AI-native math-xianxia life simulator. The LLM IS the game engine — it generat
 |-------|------|---------|
 | Frontend | React 19 + Vite + Tailwind v4 | 1-page game UI on `:16543` |
 | API | NestJS 11 + Prisma 6 | 3 endpoints on `:3000/api` |
+| Shared | Zod schemas in `packages/shared` | Single source of truth for game state & API shapes |
 | Database | PostgreSQL | 2 tables: Session + Message |
 | LLM | OpenAI-compatible API | The game master — generates everything |
 
@@ -34,7 +35,8 @@ Browser (:16543)
 ### What code does (not LLM)
 
 - Calls the LLM with the game master system prompt + current state
-- Parses the LLM's JSON response (Zod shape validation, no business rules)
+- Parses the LLM's JSON response with shared Zod schemas
+- Applies a minimal hard-rules layer: attribute bounds 0-100, age/lifespan death, realm progression only forward
 - Persists state to PostgreSQL
 - Renders the UI
 
@@ -44,25 +46,29 @@ Browser (:16543)
 
 ```
 apps/
-  api/           — NestJS backend (1 service, 1 controller, 5 files)
+  api/           — NestJS backend (1 service, 1 controller, 7 files)
     src/
       main.ts            — bootstrap (CORS, prefix, listen)
-      app.module.ts      — root module (ConfigModule + Prisma + GameController)
-      game.service.ts    — the one service (inline schema + prompt + LLM fetch)
+      app.module.ts      — root module (ConfigModule + Prisma + GameController + LoggerModule)
+      game.service.ts    — the one service (prompt + LLM fetch + rule enforcement)
       game.controller.ts — 3 endpoints (create / get / action)
+      rules/             — minimal hard-rules layer
       prisma.service.ts  — Prisma client lifecycle
+      logger.*           — lightweight request/game logging
     prisma/
       schema.prisma      — 2 models (Session, Message)
   web/           — React frontend (1 page)
     src/
       main.tsx    — React entry
-      App.tsx     — the one game page (state + narrative + options)
+      App.tsx     — the one game page (state + narrative + options + world preference)
       index.css   — Tailwind v4 + Neo-Brutalist theme
+packages/
+  shared/        — Zod schemas + world book + API types
 ```
 
-### No packages
+### One shared package only
 
-All shared packages (`@variational-infinity/shared`, `@variational-infinity/ai`, `@variational-infinity/game-engine`, `@variational-infinity/observability`) have been deleted. Everything is inlined into `apps/api/src/game.service.ts`.
+`@variational-infinity/shared` is the single source of truth for game state shape, realm order, world book, and API DTOs. The other packages (`@variational-infinity/ai`, `@variational-infinity/game-engine`, `@variational-infinity/observability`) remain deleted.
 
 ---
 
@@ -89,6 +95,7 @@ pnpm dev:web     # React frontend on http://localhost:16543
 ```bash
 pnpm typecheck   # TypeScript check
 pnpm build       # build all
+pnpm test        # run rules unit tests
 pnpm db:generate # regenerate Prisma client
 ```
 
@@ -115,7 +122,7 @@ The system prompt in `game.service.ts` contains:
 - Instructions: generate narrative + options + full state each turn
 - Output format: JSON with `narrative`, `options`, `state`, `status`
 
-The LLM returns the FULL game state each turn (not a delta). Code stores it as-is. This is the core of "AI+Game" — the LLM is the sole state manager.
+The LLM returns the FULL game state each turn (not a delta). Code then applies a minimal hard-rules layer to guard against LLM drift (attribute bounds, lifespan death, realm progression) before persisting. The LLM is the primary state manager; code is the safety net, not the game designer.
 
 ---
 
@@ -136,11 +143,12 @@ Neo-Brutalist: thick black borders, hard shadows, zero rounded corners, `font-mo
 
 ## What Doesn't Exist (by design)
 
-- No shared packages — everything inlined
-- No safety pipeline — the LLM is trusted as game master
-- No audit/trace logging — game doesn't need enterprise observability
+- No `@variational-infinity/ai` / `@variational-infinity/game-engine` / `@variational-infinity/observability` — those were over-engineered
+- No Python Agent Service or Agent Bridge
+- No safety pipeline — the LLM is trusted as game master; no regex-based guardrails
+- No audit/trace logging tables — lightweight stdout logging only
 - No action reducers or state machine — the LLM manages state transitions
 - No prompt registry — one system prompt, inline in the service
 - No provider registry — one LLM endpoint, one `fetch()` call
+- No preset ending trigger (e.g. "collect X evidence + realm Y") — endings emerge naturally from the narrative
 - No CI/CD, no Dockerfiles, no production deployment
-- No tests (yet)
