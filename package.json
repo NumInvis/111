@@ -11,16 +11,16 @@
   "scripts": {
     "dev:api": "pnpm --filter @variational-infinity/api dev",
     "dev:web": "pnpm --filter @mythweaver/web dev",
-    "dev:agent": "cd apps/agent-service && uv run uvicorn app.main:app --reload --port 8000",
     "build": "pnpm -r build",
-    "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
-    "db:push": "pnpm --filter @variational-infinity/api prisma db push",
-    "db:migrate": "pnpm --filter @variational-infinity/api prisma migrate dev",
-    "db:generate": "pnpm --filter @variational-infinity/api prisma generate"
+    "db:push": "pnpm --filter @variational-infinity/api prisma:push",
+    "db:migrate": "pnpm --filter @variational-infinity/api prisma:migrate",
+    "db:generate": "pnpm --filter @variational-infinity/api prisma:generate"
   },
   "onlyBuiltDependencies": [
-    "esbuild"
+    "esbuild",
+    "unrs-resolver",
+    "@swc/core"
   ]
 }

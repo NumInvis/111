@@ -11,10 +11,5 @@ module.exports = {
       },
     ],
   },
-  moduleNameMapper: {
-    '^@vi/shared$': '<rootDir>/../../packages/shared/src/index.ts',
-    '^@vi/ai$': '<rootDir>/../../packages/ai/src/index.ts',
-    '^@vi/game-engine$': '<rootDir>/../../packages/game-engine/src/index.ts',
-    '^@vi/observability$': '<rootDir>/../../packages/observability/src/index.ts',
-  },
+  moduleNameMapper: {},
 };

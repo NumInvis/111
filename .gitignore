@@ -4,14 +4,6 @@ build/
 .env.local
 .env.*.local
 apps/**/.env
-*.pyc
-__pycache__/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-*.egg-info/
-.venv/
-uv.lock
 coverage/
 .next/
 .turbo/
@@ -19,4 +11,3 @@ prisma/migrations/
 reference/open-source/
 reference/ink-reference/
 reference/novelist-skill-reference/
-routeTree.gen.ts

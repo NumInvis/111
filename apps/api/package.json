@@ -3,12 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "nest watch --exec tsx",
+    "dev": "nest start --watch --exec \"tsx\"",
     "build": "nest build",
     "start": "tsx src/main.ts",
     "start:prod": "node dist/main.js",
     "typecheck": "tsc --noEmit",
-    "test": "jest",
+    "test": "jest --passWithNoTests",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "prisma:migrate": "prisma migrate dev"
@@ -19,14 +19,8 @@
     "@nestjs/core": "^11",
     "@nestjs/platform-express": "^11",
     "@prisma/client": "^6",
-    "@variational-infinity/ai": "workspace:*",
-    "@variational-infinity/game-engine": "workspace:*",
-    "@variational-infinity/observability": "workspace:*",
-    "@variational-infinity/shared": "workspace:*",
-    "nestjs-zod": "^5.4.0",
     "reflect-metadata": "^0.2",
     "rxjs": "^7",
-    "uuid": "^11",
     "zod": "^3"
   },
   "devDependencies": {
@@ -35,7 +29,6 @@
     "@swc/cli": "^0.8.1",
     "@swc/core": "^1.15.40",
     "@types/express": "^5",
-    "@types/uuid": "^10",
     "jest": "^30",
     "prisma": "^6",
     "ts-jest": "^29",

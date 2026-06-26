@@ -1,27 +1,13 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
-import { PrismaModule } from './prisma/prisma.module';
-import { LlmModule } from './llm/llm.module';
-import { SafetyModule } from './safety/safety.module';
-import { AuditModule } from './audit/audit.module';
-import { GenerationModule } from './generation/generation.module';
-import { GameModule } from './game/game.module';
-import { AgentBridgeModule } from './agent-bridge/agent-bridge.module';
+import { LoggerModule } from './logger.module';
+import { GameController } from './game.controller';
+import { GameService } from './game.service';
+import { PrismaService } from './prisma.service';
 
 @Module({
-  imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
-    PrismaModule,
-    LlmModule,
-    SafetyModule,
-    AuditModule,
-    GenerationModule,
-    GameModule,
-    AgentBridgeModule,
-  ],
-  controllers: [AppController],
-  providers: [AppService],
+  imports: [ConfigModule.forRoot({ isGlobal: true }), LoggerModule],
+  controllers: [GameController],
+  providers: [GameService, PrismaService],
 })
 export class AppModule {}

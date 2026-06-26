@@ -1,209 +1,146 @@
 # AGENTS.md — 变分无限 (Variational Infinity)
 
-AI-native math-xianxia life simulator. Player progresses year-by-year through 14 cultivation realms, grows 8 attributes, triggers endings. AI generates all world content; humans define schemas, safety boundaries, state rules, and engineering.
+AI-native math-xianxia life simulator. The LLM IS the game engine — it generates the world, narrates each year, offers choices, manages state, and drives endings. Code is the plumbing: call LLM, persist state, render UI.
 
 ---
 
-## Hard Constraints
+## Architecture
 
-- **NO mock/fallback anywhere**: `MockProvider`, fallback blueprint, fallback dialogue, `generate_mock_*` — all banned. LLM failures throw errors to the client. Both TS (`LlmService`) and Python (`agents/*.py`) enforce this — `ValueError`/`Error` if provider config missing.
-- **Schema-first**: Zod (TS) in `packages/shared/src/schemas/` is single source of truth. AI output must `safeParse` before entering business logic. Python schemas in `apps/agent-service/app/schemas/models.py` mirror TS schemas via Pydantic v2.
-- **Real API keys only on server**: Frontend never holds model keys. `VITE_*` env vars are for UI config only.
-- **No comments in code**: Do not add any comments unless explicitly asked.
-- **Do not modify `reference/open-source/`**: Only for architecture learning.
+| Layer | Tech | Purpose |
+|-------|------|---------|
+| Frontend | React 19 + Vite + Tailwind v4 | 1-page game UI on `:16543` |
+| API | NestJS 11 + Prisma 6 | 3 endpoints on `:3000/api` |
+| Database | PostgreSQL | 2 tables: Session + Message |
+| LLM | OpenAI-compatible API | The game master — generates everything |
 
----
+### Data flow
 
-## Commands
-
-```bash
-pnpm install                    # install all deps
-pnpm dev:web                    # React frontend (Vite, port 16543)
-pnpm dev:api                    # NestJS API (nest watch, port 3000)
-pnpm dev:agent                  # Python Agent Service (uvicorn, port 8000)
-pnpm build                      # build all packages
-pnpm typecheck                  # TypeScript check all packages
-pnpm test                       # run all tests
-pnpm db:generate                # generate Prisma client
-pnpm db:push                    # push Prisma schema to PostgreSQL
-pnpm db:migrate                 # create + run migration
+```
+Browser (:16543)
+  → POST /api/game/sessions          → LLM generates world + initial state → persist
+  → POST /api/game/sessions/:id/action → LLM generates narrative + options + new state → persist
+  → GET  /api/game/sessions/:id        → return state + message history
 ```
 
-Prerequisites: PostgreSQL must be running at `DATABASE_URL` before `db:push`/`db:migrate`. Use `docker compose up -d` to start Postgres from the root `docker-compose.yml` (user `vi`, password `vi_local_dev`, db `variational_infinity`). The API crashes on startup if `AI_BASE_URL` is empty — `.env.local` must have real LLM provider config (no `mock` provider exists).
+### What the LLM does (not code)
+
+- Generates the world (locations, NPCs, clues, attributes, realm rules)
+- Narrates each year's situation
+- Offers 2-4 choices with real trade-offs
+- Manages game state (attributes, age, realm, discoveries, relationships)
+- Decides realm breakthrough, death, and endings
+- Enforces rules (attribute bounds 0-100, age vs lifespan, realm hierarchy) through the prompt
+
+### What code does (not LLM)
+
+- Calls the LLM with the game master system prompt + current state
+- Parses the LLM's JSON response (Zod shape validation, no business rules)
+- Persists state to PostgreSQL
+- Renders the UI
 
 ---
 
 ## Monorepo Structure
 
-| Package | `package.json` name | Path alias | Has real code? |
-|---------|---------------------|------------|---------------|
-| `apps/api` | `@variational-infinity/api` | `@vi/shared`, `@vi/ai`, `@vi/game-engine`, `@vi/observability` | Yes — NestJS with 8 modules |
-| `apps/web` | `@mythweaver/web` | `@/*` → `src/*` | Yes — React 19, Zustand, TanStack Router |
-| `apps/agent-service` | (Python — `pyproject.toml`) | — | Yes — FastAPI, 5 Pydantic AI agents |
-| `packages/shared` | `@variational-infinity/shared` | — | Yes — Zod schemas + API types |
-| `packages/ai` | `@variational-infinity/ai` | — | Yes — ProviderRegistry, PromptRegistry, 5 safety pipelines |
-| `packages/game-engine` | `@variational-infinity/game-engine` | — | Yes — state machine, reducers, rule checkers |
-| `packages/observability` | `@variational-infinity/observability` | — | Yes — createTraceId, formatLatency, AuditContext |
+```
+apps/
+  api/           — NestJS backend (1 service, 1 controller, 5 files)
+    src/
+      main.ts            — bootstrap (CORS, prefix, listen)
+      app.module.ts      — root module (ConfigModule + Prisma + GameController)
+      game.service.ts    — the one service (inline schema + prompt + LLM fetch)
+      game.controller.ts — 3 endpoints (create / get / action)
+      prisma.service.ts  — Prisma client lifecycle
+    prisma/
+      schema.prisma      — 2 models (Session, Message)
+  web/           — React frontend (1 page)
+    src/
+      main.tsx    — React entry
+      App.tsx     — the one game page (state + narrative + options)
+      index.css   — Tailwind v4 + Neo-Brutalist theme
+```
+
+### No packages
+
+All shared packages (`@variational-infinity/shared`, `@variational-infinity/ai`, `@variational-infinity/game-engine`, `@variational-infinity/observability`) have been deleted. Everything is inlined into `apps/api/src/game.service.ts`.
 
 ---
 
-## API (NestJS)
+## Build and Test Commands
 
-**Entry**: `apps/api/src/main.ts` — global prefix `/api`, port from `PORT` env (default 3000), CORS restricted to `localhost:16543` and `localhost:3000`.
+### Setup
 
-**Modules** (registered in `AppModule`):
-- `ConfigModule` (isGlobal), `PrismaModule`, `LlmModule`, `SafetyModule`, `AuditModule`, `GenerationModule`, `GameModule`, `AgentBridgeModule`
+```bash
+pnpm install
+docker compose up -d
+cp .env.example .env.local          # set AI_BASE_URL, AI_MODEL, AI_API_KEY, DATABASE_URL
+pnpm db:push                        # push Prisma schema to Postgres
+```
 
-**Controllers and routes** (all under `/api/` prefix):
+### Development
 
-| Route | Method | Controller |
-|-------|--------|------------|
-| `/api/game/sessions` | POST | GameController — create session |
-| `/api/game/sessions/:id` | GET | GameController — get session |
-| `/api/game/sessions/:id/actions` | POST | GameController — apply action |
-| `/api/game/sessions/:id/next-year` | POST | GameController — advance year |
-| `/api/game/sessions/:id/state` | GET | GameController — get player state |
-| `/api/game/sessions/:id/endings` | GET | GameController — check endings |
-| `/api/game/sessions/:id/trigger-ending` | POST | GameController — trigger ending |
-| `/api/game/sessions/:id/end` | POST | GameController — end session |
-| `/api/game/sessions/:id/dialogue` | POST | GameController — start dialogue |
-| `/api/game/sessions/:id/dialogue/message` | POST | GameController — send dialogue message |
-| `/api/game/sessions/:id/agent-memory` | GET | GameController — get agent memory |
-| `/api/game/sessions/:id/agent-memory` | POST | GameController — store agent memory |
-| `/api/game/sessions/:id/trace` | GET | GameController — get game trace |
-| `/api/generation/world/:sessionId` | POST | GenerationController — generate world |
-| `/api/generation/world/:sessionId` | GET | GenerationController — get blueprint |
-| `/api/llm/providers` | GET | LlmController — provider info |
-| `/api/` | GET | AppController — root |
-| `/api/health` | GET | AppController — health check |
+```bash
+pnpm dev:api     # NestJS API on http://localhost:3000
+pnpm dev:web     # React frontend on http://localhost:16543
+```
 
-**No `.js` import extensions**: API imports do NOT use `.js` extensions (e.g. `'./app.module'`, `'@nestjs/core'`). The `.js` convention was removed — `tsc` with `moduleResolution: "bundler"` does not resolve `.js` extensions in node_modules, and `nest build` uses the `swc` builder which ignores them anyway.
+### Other
 
-**`nest build` uses swc**: Configured in `nest-cli.json` with `"builder": "swc"` and `"tsConfigPath": "tsconfig.json"` (not `tsconfig.build.json`). The `swc` builder compiles successfully; `tsc --noEmit` works for type checking with `moduleResolution: "bundler"` since it skips resolution validation. Do not switch back to `tsc` builder or add `.js` extensions. **SWC on Windows requires `baseUrl: "."` in tsconfig** — without it, SWC panics with "failed to canonicalize jsc.baseUrl" UNC path error.
-
-**tsconfig path aliases** resolve to `../../packages/*/src/index.ts` — these are TypeScript path mappings, not bundler aliases. Runtime resolution relies on pnpm workspace links.
-
-**No Pino logger**: `nestjs-pino` is NOT installed. The API uses NestJS default `Logger`. Do not add Pino unless explicitly requested.
-
-**Redis/BullMQ**: Listed in `package.json` dependencies but NOT registered in any module or used in any code. Do not assume Redis is operational.
-
-**LlmService** (`apps/api/src/llm/llm.service.ts`):
-- Uses a local `ProviderRegistryWrapper` (not directly `@vi/ai`'s `ProviderRegistry`)
-- `onModuleInit()` throws if `AI_BASE_URL` is missing — no mock provider registered
-- `generateWithSchema()`: calls provider → `safeParse` → single `attemptAutoRepair` → throws on failure
-- Retries on 429/502/503 and network errors with exponential backoff (default 3 retries)
-- Only provider file: `apps/api/src/llm/providers/openai-compatible.provider.ts` (NestJS `@Injectable()` wrapper around `@vi/ai`'s `OpenaiCompatibleProvider`)
-- Real implementation: `packages/ai/src/providers/openai-compatible.ts` — fetch-based, 30s/60s timeout, SSE streaming, API key redaction
-
-**SafetyService** (`apps/api/src/safety/safety.service.ts`):
-- Delegates to 5 pipelines from `@vi/ai`: `InputSafety`, `OutputSafety`, `FieldAllowlist`, `ReferenceIntegrity`, `SizeLimit`
-- `fullOutputCheck()` runs output + allowlist + reference integrity + size limit in sequence
-- 13 injection patterns, 7 secret patterns, output injection patterns (`<<`, `[system]`, `### system`)
-
-**GenerationService** (`apps/api/src/generation/generation.service.ts`):
-- Throws `Error` on safety check failure — NO fallback blueprint. Do not add one.
-
-**GameService** (`apps/api/src/game/game.service.ts`):
-- Imports and uses `GameStateMachine`, `ActionValidator`, `EndingArbitrator`, `RealmAdvancementChecker`, and reducers from `@vi/game-engine`
-- Valid actions: `move`, `talk`, `next_year`, `discover`, `investigate`, `event_choice`, `end_dialogue`, `resolve_event`, `attempt_breakthrough`
-- Initial player state: name='行者', age=16, realm='炼体', 8 attributes
-- `AgentBridgeService` delegates NPC dialogue and ending evaluation to the Python Agent Service when `USE_AGENT_BRIDGE=true` (default)
+```bash
+pnpm typecheck   # TypeScript check
+pnpm build       # build all
+pnpm db:generate # regenerate Prisma client
+```
 
 ---
 
-## Game Engine (`packages/game-engine`)
+## Environment Variables
 
-- **GameStateMachine**: 7 phases (`initializing`, `exploring`, `dialoguing`, `event`, `ending_check`, `ended`, `death`), 10 transitions with conditions
-- **14 realms**: 炼体→练气→筑基→本元→通明→化神→归一→渡劫→天门→仙境→圣境→变分境→天道境→无限
-- **8 attributes**: 计算/几何/抽象/证明/直觉/专注/体魄/家世 (0–100)
-- **Reducers**: `applyMoveAction`, `applyTalkAction`, `applyNextYearAction`, `applyDiscoverAction`, `applyInvestigateAction`, `applyEventChoiceAction`, `applyEndDialogueAction`, `applyResolveEventAction`, `applyAttemptBreakthroughAction` — each produces `JournalEntry` + `GameEvent`
-- **Rule checkers**: `EndingArbitrator` (requiredEvidence + requiredRealm), `ActionValidator`, `StateBoundsChecker`, `RealmAdvancementChecker` (attribute thresholds per realm)
-- **Tests exist**: `packages/game-engine/src/__tests__/reducers.test.ts`, `rules.test.ts` — run with `pnpm --filter @variational-infinity/game-engine test`
-
----
-
-## Agent Service (Python FastAPI)
-
-**Entry**: `apps/agent-service/app/main.py` — all routes under `/api/agent/` prefix.
-
-**Routes**: `/api/agent/` (health), `/api/agent/world`, `/api/agent/npc`, `/api/agent/event`, `/api/agent/ending`, `/api/agent/memory`
-
-**5 Pydantic AI agents**: `world_generator`, `npc_agent`, `event_agent`, `ending_director`, `memory_agent` — each raises `ValueError` if no LLM provider configured. No CrewAI or LangGraph — only `pydantic-ai`.
-
-**Env vars** (in `apps/agent-service/.env.example`): `AGENT_LLM_PROVIDER`, `AGENT_LLM_BASE_URL`, `AGENT_LLM_MODEL`, `AGENT_LLM_API_KEY` (separate from NestJS's `AI_*` vars). Also `AGENT_NESTJS_API_URL` for calling back to NestJS, `AGENT_DATABASE_URL` for direct DB access.
-
-**Run with**: `cd apps/agent-service && uv run uvicorn app.main:app --reload --port 8000`
-
-**Safety pipeline** (`app/safety/pipeline.py`): mirrors TS safety — injection/secret/output patterns + reference integrity + field allowlist.
+| Variable | Purpose |
+|----------|---------|
+| `AI_BASE_URL` | LLM provider base URL (e.g. `https://wincode.winning.com.cn/ai/v1`) |
+| `AI_MODEL` | LLM model name (e.g. `deepseek-v4-flash`) |
+| `AI_API_KEY` | LLM API key |
+| `AI_TIMEOUT_MS` | LLM call timeout in ms (default 60000) |
+| `DATABASE_URL` | PostgreSQL connection string |
+| `VITE_API_BASE_URL` | Frontend API base URL (default `/api`) |
 
 ---
 
-## Frontend (React)
+## Game Master Prompt
 
-**Dev server**: port **16543** (not default 5173). Proxy `/api` → `http://localhost:3000`.
+The system prompt in `game.service.ts` contains:
+- The 14-realm world book (math levels from kindergarten to PhD)
+- Rules for attribute bounds, age/lifespan, realm breakthrough, death, endings
+- Instructions: generate narrative + options + full state each turn
+- Output format: JSON with `narrative`, `options`, `state`, `status`
 
-**Routing**: TanStack Router file-based — auto-generates `routeTree.gen.ts` (gitignored). Routes: `/` (index), `/world-gen`, `/explore`, `/dialogue`, `/journal`, `/ending`, `/death`.
-
-**State**: Zustand store at `stores/gameStore.ts` — uses `immer` `produce` for immutable updates. Fields: `sessionId`, `preference`, `worldBlueprint`, `player`, `currentYear`, `journal`, `messages` (Record<string, DialogueMessage[]>), `activeEvent` (EventSeed), `availableEndings` (EndingCandidate[]), `phase` (GamePhase enum), `error`, `loading`.
-
-**API client**: `lib/api.ts` — real endpoints, no mock. Unwraps `ApiResponse<T>` wrapper (throws if `success` is false).
-
-**Types**: `types/index.ts` — defines `REALMS` (14 names), `ATTRIBUTE_LABELS` (8 attribute key→Chinese name map), `WorldPreference`, `WorldBlueprint`, `PlayerState`, `JournalEntry`, `DialogueMessage`, `EndingCandidate`, `StateUpdate`, `ApiResponse<T>`, `GenerationPreferences`, `GenerationScale`, `GenerationMode`.
-
-**UI components**: Neo Brutalism — `Button`, `Card`, `EventCard`, `NPCProfile`, `Panel`, `ProgressBar`, `StatusPanel`, `Tag`. Style: thick black borders (`border-3`), hard shadows (`4px 4px 0px #000`), gold/玄黑/赤/青/绿/紫 palette, `Space Mono` + `Noto Sans SC` fonts, zero rounded corners.
+The LLM returns the FULL game state each turn (not a delta). Code stores it as-is. This is the core of "AI+Game" — the LLM is the sole state manager.
 
 ---
 
-## Shared Schemas (`packages/shared`)
+## Hard Constraints
 
-- `world-blueprint.schema.ts`: `RealmIdEnum`, `RealmNameEnum`, `CultivationPathSchema`, `CultivationTierSchema`, `NpcSeedSchema` (with `mathematicalStrength`), `EventSeedSchema`, `EndingCandidateSchema`, `LegendaryFigureSchema`, `PowerSystemSchema`
-- `game-state.schema.ts`: `PlayerStateSchema` (8 attributes), `GameActionSchema`, `GameEventSchema`, `DialogueMessageSchema`, `JournalEntrySchema`, `EventTypeEnum`, `JournalCategoryEnum`
-- `agent.schema.ts`: `MemoryEntrySchema`, `AgentCallLogSchema`, `SafetyEventSchema`
-- `types/api.ts`: `ApiResponse`, `GenerationPreferences`, `GenerationMode` enum, `LlmProviderInfo`
-
----
-
-## Prisma Schema
-
-13 models: `User`, `GameSession`, `WorldBlueprint`, `GameState`, `DialogueMessage`, `WorldEvent`, `JournalEntry`, `AgentMemory`, `LlmCall`, `SafetyEvent`, `GameTrace`, `PromptVersion`, `ProviderConfig`. Database: `variational_infinity` on PostgreSQL.
+- **NO mock/fallback**: LLM failures throw errors to the client. No MockProvider, no fallback blueprints.
+- **Real API keys only on server**: The frontend never holds model keys.
+- **No comments in code**: Do not add comments unless explicitly asked.
+- **Do not modify `reference/`**: That directory is for architecture learning only.
 
 ---
 
-## Prompt Registry
+## UI Style
 
-`packages/ai/src/prompts/prompt-registry.ts` — 5 built-in prompts with `{{var}}` template syntax:
-- `world_generation`, `npc_dialogue`, `event_generation`, `ending_candidate`, `memory_summarizer`
-
-All AI calls must use `PromptRegistry.render()`, never build prompts manually in services.
+Neo-Brutalist: thick black borders, hard shadows, zero rounded corners, `font-mono`, red/dark/cyan/green/purple palette. See `index.css` for Tailwind v4 theme tokens.
 
 ---
 
-## Safety Pipeline (TS)
+## What Doesn't Exist (by design)
 
-`packages/ai/src/safety/safety-pipeline.ts` — 5 pipeline classes:
-- `InputSafetyPipeline` — 13 injection patterns, threshold 0.8
-- `OutputSafetyPipeline` — 7 secret patterns + output injection patterns
-- `FieldAllowlistPipeline` — extra field detection
-- `ReferenceIntegrityPipeline` — validates locationId/npcId/factionId/requiredRealm against known IDs
-- `SizeLimitPipeline` — default 50KB JSON limit
-
-All AI output must pass `fullOutputCheck()` before entering business logic.
-
----
-
-## pnpm Workspace Gotchas
-
-- **`pnpm dev:web` is broken**: Root script filters `@variational-infinity/web` but the package is named `@mythweaver/web`. Fix: change to `pnpm --filter @mythweaver/web dev` or `pnpm --filter ./apps/web dev`.
-- `pnpm-workspace.yaml` `allowBuilds` has placeholder strings `"set this to true or false"` for several packages — these are not boolean values and will cause `pnpm approve-builds` to prompt interactively. Run `pnpm approve-builds` manually after `pnpm install`.
-- `onlyBuiltDependencies` in root `package.json` only lists `esbuild`. After adding new native deps, you may need to add them here or approve builds.
-- API `@nestjs/config` is **v4** (not v11) — different major version from `@nestjs/common`/`@nestjs/core` v11.
-
----
-
-## What Doesn't Exist Yet
-
-- No CI/CD
-- No Pino logger integration
-- No Redis/BullMQ usage in code
-- No Playwright E2E tests
-- No OpenTelemetry (observability package has basic trace/audit helpers only)
+- No shared packages — everything inlined
+- No safety pipeline — the LLM is trusted as game master
+- No audit/trace logging — game doesn't need enterprise observability
+- No action reducers or state machine — the LLM manages state transitions
+- No prompt registry — one system prompt, inline in the service
+- No provider registry — one LLM endpoint, one `fetch()` call
+- No CI/CD, no Dockerfiles, no production deployment
+- No tests (yet)
