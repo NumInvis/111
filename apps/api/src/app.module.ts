@@ -4,10 +4,12 @@ import { LoggerModule } from './logger.module';
 import { GameController } from './game.controller';
 import { GameService } from './game.service';
 import { PrismaService } from './prisma.service';
+import { AIConfigService } from './config';
+import { ModelService } from './models';
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true }), LoggerModule],
   controllers: [GameController],
-  providers: [GameService, PrismaService],
+  providers: [GameService, PrismaService, AIConfigService, ModelService],
 })
 export class AppModule {}

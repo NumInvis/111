@@ -28,6 +28,24 @@ interface WorldPreference {
   theme?: string; tone?: string; scale?: 'small' | 'medium' | 'large'; seed?: string
 }
 
+interface AIConfig {
+  api_base: string
+  api_key: string
+  model: string
+  timeout_ms: number
+  temperature: number
+}
+
+interface AppConfigData {
+  ai: AIConfig
+  port: number
+}
+
+interface ModelInfo {
+  id: string
+  owned_by?: string
+}
+
 const LORE_FRAGMENTS = [
   '天地初开，混沌未分...',
   '大道无形，生育天地...',
@@ -69,6 +87,10 @@ export default function App() {
   const [wisdomIdx] = useState(() => Math.floor(Math.random() * WISDOM.length))
   const [showPref, setShowPref] = useState(false)
   const [preference, setPreference] = useState<WorldPreference>({ theme: '', tone: '', scale: 'medium', seed: '' })
+  const [showSettings, setShowSettings] = useState(false)
+  const [cfg, setCfg] = useState<Partial<AIConfig>>({ api_base: '', api_key: '', model: '' })
+  const [models, setModels] = useState<ModelInfo[]>([])
+  const [modelsLoading, setModelsLoading] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -80,6 +102,46 @@ export default function App() {
     const interval = setInterval(() => setLoreIdx((i) => (i + 1) % LORE_FRAGMENTS.length), 3000)
     return () => clearInterval(interval)
   }, [phase])
+
+  async function loadConfig() {
+    try {
+      const res = await fetchApi<AppConfigData>('/config')
+      if (res.data?.ai) {
+        setCfg(res.data.ai)
+      }
+    } catch (e) {
+      logger.error('加载配置失败', { error: e instanceof Error ? e.message : String(e) })
+    }
+  }
+
+  async function fetchModels() {
+    setModelsLoading(true)
+    try {
+      const res = await fetchApi<{ models: ModelInfo[]; count: number }>('/models')
+      if (res.data) {
+        setModels(res.data.models)
+        logger.logGameEvent('模型列表加载', { count: res.data.count })
+      }
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : '获取模型列表失败')
+    } finally {
+      setModelsLoading(false)
+    }
+  }
+
+  async function saveConfig() {
+    try {
+      await fetchApi<AppConfigData>('/config', {
+        method: 'POST',
+        body: JSON.stringify({ ai: cfg }),
+      })
+      setShowSettings(false)
+      setErr(null)
+      logger.logGameEvent('配置已保存')
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : '保存配置失败')
+    }
+  }
 
   function buildPreference(): WorldPreference | undefined {
     const p: WorldPreference = {}
@@ -148,6 +210,12 @@ export default function App() {
     setErr(null); setLog([]); setPhase('home')
   }
 
+  function openSettings() {
+    loadConfig()
+    fetchModels()
+    setShowSettings(true)
+  }
+
   // HOME
   if (phase === 'home') {
     return (
@@ -212,14 +280,74 @@ export default function App() {
           <div className="flex gap-3 justify-center">
             {!showPref && (
               <button onClick={() => setShowPref(true)} className="font-mono font-bold uppercase tracking-wide bg-bg-card text-text-primary border-3 border-border-primary shadow-nb px-4 py-4 text-lg nb-hover nb-active transition-all">
-                <Settings2 className="w-5 h-5 inline mr-2" />配置
+                <Settings2 className="w-5 h-5 inline mr-2" />偏好
               </button>
             )}
+            <button onClick={openSettings} className="font-mono font-bold uppercase tracking-wide bg-bg-card text-text-primary border-3 border-border-primary shadow-nb px-4 py-4 text-lg nb-hover nb-active transition-all">
+              ⚙ 设置
+            </button>
             <button onClick={startGame} className="font-mono font-bold uppercase tracking-wide bg-primary text-text-inverse border-3 border-border-primary shadow-nb px-8 py-4 text-lg nb-hover nb-active transition-all">
               <Sparkles className="w-5 h-5 inline mr-2" />开天辟地
             </button>
           </div>
         </motion.div>
+
+        {showSettings && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4" onClick={() => setShowSettings(false)}>
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+              className="bg-bg-card border-3 border-border-primary shadow-nb-xl p-6 w-full max-w-md"
+              onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-mono font-bold text-lg">⚙ AI 设置</h2>
+                <button onClick={() => setShowSettings(false)} className="p-1 nb-hover"><X className="w-5 h-5" /></button>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <label className="font-mono text-xs text-text-secondary block mb-1">API 地址</label>
+                  <input value={cfg.api_base || ''} onChange={(e) => setCfg((c) => ({ ...c, api_base: e.target.value }))}
+                    placeholder="https://..."
+                    className="w-full bg-bg-paper border-2 border-border-primary px-3 py-2 font-mono text-sm focus:outline-none focus:border-accent-cyan" />
+                </div>
+                <div>
+                  <label className="font-mono text-xs text-text-secondary block mb-1">API Key</label>
+                  <input type="password" value={cfg.api_key || ''} onChange={(e) => setCfg((c) => ({ ...c, api_key: e.target.value }))}
+                    placeholder="sk-..."
+                    className="w-full bg-bg-paper border-2 border-border-primary px-3 py-2 font-mono text-sm focus:outline-none focus:border-accent-cyan" />
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="font-mono text-xs text-text-secondary">模型</label>
+                    <button onClick={fetchModels} disabled={modelsLoading} className="font-mono text-xs border-2 border-border-primary px-2 py-1 nb-hover disabled:opacity-50">
+                      {modelsLoading ? '获取中...' : '📡 获取模型列表'}
+                    </button>
+                  </div>
+                  <select value={cfg.model || ''} onChange={(e) => setCfg((c) => ({ ...c, model: e.target.value }))}
+                    className="w-full bg-bg-paper border-2 border-border-primary px-3 py-2 font-mono text-sm focus:outline-none focus:border-accent-cyan">
+                    <option value="">-- 选择模型 --</option>
+                    {cfg.model && !models.some((m) => m.id === cfg.model) && <option value={cfg.model}>{cfg.model} (当前)</option>}
+                    {models.map((m) => <option key={m.id} value={m.id}>{m.id}</option>)}
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="font-mono text-xs text-text-secondary block mb-1">超时 (ms)</label>
+                    <input type="number" value={cfg.timeout_ms || 60000} onChange={(e) => setCfg((c) => ({ ...c, timeout_ms: Number(e.target.value) }))}
+                      className="w-full bg-bg-paper border-2 border-border-primary px-3 py-2 font-mono text-sm focus:outline-none focus:border-accent-cyan" />
+                  </div>
+                  <div>
+                    <label className="font-mono text-xs text-text-secondary block mb-1">温度</label>
+                    <input type="number" step="0.1" min="0" max="2" value={cfg.temperature ?? 0.9} onChange={(e) => setCfg((c) => ({ ...c, temperature: Number(e.target.value) }))}
+                      className="w-full bg-bg-paper border-2 border-border-primary px-3 py-2 font-mono text-sm focus:outline-none focus:border-accent-cyan" />
+                  </div>
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 mt-6">
+                <button onClick={() => setShowSettings(false)} className="font-mono border-2 border-border-primary px-4 py-2 nb-hover">取消</button>
+                <button onClick={saveConfig} className="font-mono bg-primary text-text-inverse border-2 border-border-primary px-4 py-2 nb-hover">保存</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
       </div>
     )
   }
@@ -320,6 +448,9 @@ export default function App() {
             <div className="flex items-center gap-1"><span className="text-text-secondary">年龄</span> <span className="font-bold">{p.age}/{p.lifespan}</span></div>
             <div className="text-primary font-bold">{p.realm}</div>
           </div>
+          <button onClick={openSettings} className="p-2 border-3 border-border-primary bg-bg-card shadow-nb-sm nb-hover nb-active transition-all">
+            <Settings2 className="w-4 h-4" />
+          </button>
         </div>
       </header>
 
@@ -398,6 +529,63 @@ export default function App() {
             className="w-full text-center font-mono text-xs text-text-secondary border-2 border-border-subtle py-2 nb-hover nb-active transition-all">
             <Scroll className="w-3 h-3 inline mr-1" />查看全部历程 ({log.length} 条)
           </button>
+        </div>
+      )}
+
+      {showSettings && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4" onClick={() => setShowSettings(false)}>
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+            className="bg-bg-card border-3 border-border-primary shadow-nb-xl p-6 w-full max-w-md"
+            onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-mono font-bold text-lg">⚙ AI 设置</h2>
+              <button onClick={() => setShowSettings(false)} className="p-1 nb-hover"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="font-mono text-xs text-text-secondary block mb-1">API 地址</label>
+                <input value={cfg.api_base || ''} onChange={(e) => setCfg((c) => ({ ...c, api_base: e.target.value }))}
+                  placeholder="https://..."
+                  className="w-full bg-bg-paper border-2 border-border-primary px-3 py-2 font-mono text-sm focus:outline-none focus:border-accent-cyan" />
+              </div>
+              <div>
+                <label className="font-mono text-xs text-text-secondary block mb-1">API Key</label>
+                <input type="password" value={cfg.api_key || ''} onChange={(e) => setCfg((c) => ({ ...c, api_key: e.target.value }))}
+                  placeholder="sk-..."
+                  className="w-full bg-bg-paper border-2 border-border-primary px-3 py-2 font-mono text-sm focus:outline-none focus:border-accent-cyan" />
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-mono text-xs text-text-secondary">模型</label>
+                  <button onClick={fetchModels} disabled={modelsLoading} className="font-mono text-xs border-2 border-border-primary px-2 py-1 nb-hover disabled:opacity-50">
+                    {modelsLoading ? '获取中...' : '📡 获取模型列表'}
+                  </button>
+                </div>
+                <select value={cfg.model || ''} onChange={(e) => setCfg((c) => ({ ...c, model: e.target.value }))}
+                  className="w-full bg-bg-paper border-2 border-border-primary px-3 py-2 font-mono text-sm focus:outline-none focus:border-accent-cyan">
+                  <option value="">-- 选择模型 --</option>
+                  {cfg.model && !models.some((m) => m.id === cfg.model) && <option value={cfg.model}>{cfg.model} (当前)</option>}
+                  {models.map((m) => <option key={m.id} value={m.id}>{m.id}</option>)}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-mono text-xs text-text-secondary block mb-1">超时 (ms)</label>
+                  <input type="number" value={cfg.timeout_ms || 60000} onChange={(e) => setCfg((c) => ({ ...c, timeout_ms: Number(e.target.value) }))}
+                    className="w-full bg-bg-paper border-2 border-border-primary px-3 py-2 font-mono text-sm focus:outline-none focus:border-accent-cyan" />
+                </div>
+                <div>
+                  <label className="font-mono text-xs text-text-secondary block mb-1">温度</label>
+                  <input type="number" step="0.1" min="0" max="2" value={cfg.temperature ?? 0.9} onChange={(e) => setCfg((c) => ({ ...c, temperature: Number(e.target.value) }))}
+                    className="w-full bg-bg-paper border-2 border-border-primary px-3 py-2 font-mono text-sm focus:outline-none focus:border-accent-cyan" />
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button onClick={() => setShowSettings(false)} className="font-mono border-2 border-border-primary px-4 py-2 nb-hover">取消</button>
+              <button onClick={saveConfig} className="font-mono bg-primary text-text-inverse border-2 border-border-primary px-4 py-2 nb-hover">保存</button>
+            </div>
+          </motion.div>
         </div>
       )}
     </div>

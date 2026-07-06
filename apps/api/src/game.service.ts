@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { PrismaService } from './prisma.service';
 import { AppLogger } from './logger.module';
+import { AIConfigService } from './config';
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import {
@@ -99,28 +99,23 @@ ${WORLD_BOOK}
 
 @Injectable()
 export class GameService {
-  private readonly baseUrl: string;
-  private readonly model: string;
-  private readonly apiKey: string;
-  private readonly timeoutMs: number;
-
   constructor(
     private readonly prisma: PrismaService,
-    private readonly config: ConfigService,
     private readonly logger: AppLogger,
+    private readonly aiConfig: AIConfigService,
   ) {
-    this.baseUrl = this.config.get<string>('AI_BASE_URL', '');
-    this.model = this.config.get<string>('AI_MODEL', 'deepseek-v4-flash');
-    this.apiKey = this.config.get<string>('AI_API_KEY', '');
-    this.timeoutMs = this.config.get<number>('AI_TIMEOUT_MS', 60000);
-    if (!this.baseUrl) {
-      this.logger.fatal('AI_BASE_URL 未配置，无法启动', { component: 'GameService' });
-      throw new Error('AI_BASE_URL is required');
-    }
-    this.logger.log(`GameService 初始化 model=${this.model} baseUrl=${this.baseUrl}`, { component: 'GameService' });
+    this.logger.log(`GameService 初始化 model=${this.aiConfig.getAI().model} baseUrl=${this.aiConfig.getAI().apiBase}`, { component: 'GameService' });
   }
 
-  private async callLLM(systemPrompt: string, userPrompt: string, sessionId: string, label: string, temperature = 0.9): Promise<string> {
+  private get ai() {
+    return this.aiConfig.getAI();
+  }
+
+  private async callLLM(systemPrompt: string, userPrompt: string, sessionId: string, label: string, temperature?: number): Promise<string> {
+    const cfg = this.ai;
+    if (!cfg.apiBase) {
+      throw new Error('AI_BASE_URL is required');
+    }
     const traceId = randomUUID();
     const promptLen = systemPrompt.length + userPrompt.length;
     const start = performance.now();
@@ -129,25 +124,25 @@ export class GameService {
       component: 'LLM',
       sessionId,
       traceId,
-      extra: { model: this.model, promptChars: promptLen, temperature },
+      extra: { model: cfg.model, promptChars: promptLen, temperature: temperature ?? cfg.temperature },
     });
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+    const timeoutId = setTimeout(() => controller.abort(), cfg.timeoutMs);
     try {
-      const res = await fetch(`${this.baseUrl}/chat/completions`, {
+      const res = await fetch(`${cfg.apiBase}/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`,
+          'Authorization': `Bearer ${cfg.apiKey}`,
         },
         body: JSON.stringify({
-          model: this.model,
+          model: cfg.model,
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt },
           ],
-          temperature,
+          temperature: temperature ?? cfg.temperature,
         }),
         signal: controller.signal,
       });
@@ -172,7 +167,7 @@ export class GameService {
       this.logger.logLlmCall({
         sessionId,
         traceId,
-        model: this.model,
+        model: cfg.model,
         promptLen,
         responseLen: content.length,
         latencyMs,
@@ -186,7 +181,7 @@ export class GameService {
       const message = err instanceof Error ? err.message : String(err);
 
       if (err instanceof Error && err.name === 'AbortError') {
-        this.logger.error(`LLM 请求超时: ${label} (${this.timeoutMs}ms)`, {
+        this.logger.error(`LLM 请求超时: ${label} (${cfg.timeoutMs}ms)`, {
           component: 'LLM',
           sessionId,
           traceId,

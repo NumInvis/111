@@ -7,6 +7,7 @@
     "build": "nest build",
     "start": "tsx src/main.ts",
     "start:prod": "node dist/main.js",
+    "cli": "tsx scripts/cli.ts",
     "typecheck": "tsc --noEmit",
     "test": "jest --passWithNoTests",
     "prisma:generate": "prisma generate",
@@ -19,7 +20,9 @@
     "@nestjs/core": "^11",
     "@nestjs/platform-express": "^11",
     "@prisma/client": "^6",
+    "@types/js-yaml": "^4.0.9",
     "@variational-infinity/shared": "workspace:*",
+    "js-yaml": "^5.2.1",
     "reflect-metadata": "^0.2",
     "rxjs": "^7",
     "zod": "^3"
